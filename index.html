@@ -326,7 +326,8 @@ html.in-session, html.in-session body { overflow: hidden; }
 .steprow { display: flex; align-items: center; gap: 4px; padding: 6px 2px 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .steprow > input { width: 44px; min-height: 42px; padding: 4px; text-align: center; font-size: 16px; }
 .steprow .unit-in, .steprow .range-in { gap: 3px; }
-.steprow .range-in.sm input { max-width: 46px; padding: 4px; }
+.steprow .range-in.sm input { max-width: 44px; padding: 4px; }
+.steprow .range-in > span { font-size: 13px; }
 .steprow .unit-in.sm input { max-width: 58px; padding: 4px; }
 .step-n { font: 700 18px/1 var(--cond); color: var(--muted); width: 14px; flex: none; }
 .steprow .x { color: var(--muted); font-weight: 700; }
@@ -640,7 +641,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     const steps = normSteps(q.steps);
     if (how === "steps" && !steps.length) how = "none";
     let when = WHENS.includes(q.when) ? q.when : "weeks";
-    if (when === "range" && how !== "load") when = how === "steps" ? "manual" : "session";
+    if (when === "range" && !(how === "load" || (how === "steps" && exType !== "timed"))) when = how === "steps" ? "manual" : "session";
     const every = Math.max(1, Math.min(12, Math.round(num(q.every) || 1)));
     const by = num(q.by);
     const loop = how === "steps" && exType === "weights" && !!q.loop;
@@ -828,7 +829,7 @@ html.in-session, html.in-session body { overflow: hidden; }
       else if (prog.when === "manual") hint = "Goes up when you say";
       else if (prog.when === "sessions") { const left = Math.max(1, prog.every - runCount); hint = `Goes up after ${plural(left, "more workout")}`; }
       else if (prog.when === "weeks") { const left = Math.max(1, prog.every - weeksBetween(runStart, date)); hint = left === 1 ? "Goes up next week" : `Goes up in ${left} weeks`; }
-      else if (prog.when === "range" && t.reps) hint = `Goes up when you hit ${t.reps.max} on every set`;
+      else if (prog.when === "range" && t.reps) hint = how === "steps" ? `Next step when you hit ${t.reps.max} on every set` : `Goes up when you hit ${t.reps.max} on every set`;
     }
 
     // What to pre-fill each set with
@@ -838,7 +839,7 @@ html.in-session, html.in-session body { overflow: hidden; }
       let reps = null;
       if (t.reps) {
         reps = t.reps.min;
-        if (P && change !== "up" && how === "load" && eqNum(L.load, t.load)) {
+        if (P && change !== "up" && (how === "load" || (how === "steps" && L.step === N.step)) && eqNum(L.load, t.load)) {
           const lr = num((doneLast[i] || {}).reps);
           if (lr !== null) reps = Math.max(t.reps.min, Math.min(t.reps.max, lr + (prog.when === "range" ? 1 : 0)));
         }
@@ -2268,7 +2269,7 @@ function progressAll(rt, onDone) {
     for (const slot of rt.slots) {
       const ex = exById(slot.exId);
       const np = E.normProg(slot.prog, ex && ex.type);
-      if (np.how === "none" || (when === "range" && np.how !== "load")) continue;
+      if (np.how === "none" || (when === "range" && !(np.how === "load" || (np.how === "steps" && ex && ex.type !== "timed")))) continue;
       slot.prog.when = when; slot.prog.every = Number(n) || 1; changed++;
     }
     savePlan(); onDone();
@@ -2316,7 +2317,7 @@ function editSlot(rt, slotId, onDone) {
   function fixHow() {
     const ok = HOW_CHOICES[typeOf()].map((x) => x[0]);
     if (!ok.includes(w.how)) w.how = E.defaultHow(typeOf());
-    if (w.when === "range" && w.how !== "load") w.when = "weeks";
+    if (w.when === "range" && !(w.how === "load" || (w.how === "steps" && typeOf() !== "timed"))) w.when = "weeks";
     if (w.how === "steps" && !w.steps.length) {
       const timed = typeOf() === "timed", lo = Math.round(w.rmin || 8), hi = Math.round(w.rmax || lo);
       if (typeOf() === "weights" && hi > lo && hi - lo <= 7) {
@@ -2332,7 +2333,7 @@ function editSlot(rt, slotId, onDone) {
   function draw() {
     fixHow();
     const type = typeOf(), timed = type === "timed";
-    const whenOpts = E.WHEN_OPTIONS.filter(([k]) => !(k.startsWith("range") && w.how !== "load"));
+    const whenOpts = E.WHEN_OPTIONS.filter(([k]) => !(k.startsWith("range") && !(w.how === "load" || (w.how === "steps" && !timed))));
     const whenKey = `${w.when}-${w.when === "weeks" || w.when === "sessions" ? w.every : 1}`;
     const amounts = w.how === "steps" ? "" : `<div class="amounts">
         ${field("Sets", `<span class="stepper"><button type="button" class="icon-btn sm" data-w="sets-" aria-label="One less set">${ICON.minus}</button><input id="se-sets" inputmode="numeric" pattern="[0-9]*" value="${w.sets}" aria-label="Sets"><button type="button" class="icon-btn sm" data-w="sets+" aria-label="One more set">${ICON.plus}</button></span>`)}
@@ -2340,10 +2341,10 @@ function editSlot(rt, slotId, onDone) {
           : `<div class="field"><span class="field-l">Reps</span><span class="range-in"><input id="se-rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmin)}" aria-label="Fewest reps"><span>to</span><input id="se-rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmax)}" aria-label="Most reps"></span></div>`}
       </div>`;
     const load = type === "weights" ? field("Weight next time", `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="Not set"><span>lb</span></span>`, w.how === "steps" && !loopOn() ? "Used by any step without its own weight." : "") : "";
-    const steps = w.how !== "steps" ? "" : `<div class="field"><span class="field-l">Steps</span><ol class="steps">${w.steps.map((st, k) => `<li class="steprow" data-k="${k}"><span class="step-n">${k + 1}</span>
+    const steps = w.how !== "steps" ? "" : `<div class="field"><span class="field-l">Steps</span>${timed ? "" : `<span class="field-h">Sets × reps. Fill in the second reps box for a range, like 8 to 12.</span>`}<ol class="steps">${w.steps.map((st, k) => `<li class="steprow" data-k="${k}"><span class="step-n">${k + 1}</span>
         <input data-st="sets" inputmode="numeric" pattern="[0-9]*" value="${st.sets}" aria-label="Step ${k + 1} sets"><span class="x">×</span>
         ${timed ? `<span class="unit-in sm"><input data-st="secs" inputmode="numeric" pattern="[0-9]*" value="${esc(st.secs === null ? "" : st.secs)}" aria-label="Step ${k + 1} seconds"><span>s</span></span>`
-          : `<span class="unit-in sm"><input data-st="reps" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.min : "")}" aria-label="Step ${k + 1} reps"><span>reps</span></span>`}
+          : `<span class="range-in sm"><input data-st="rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.min : "")}" aria-label="Step ${k + 1} reps, or the bottom of a range"><span>to</span><input data-st="rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps && st.reps.max !== st.reps.min ? st.reps.max : "")}" placeholder="—" aria-label="Step ${k + 1} top of the rep range (optional)"></span>`}
         ${type === "weights" && !loopOn() ? `<span class="unit-in sm"><input data-st="load" inputmode="decimal" value="${esc(st.load === null || st.load === undefined ? "" : E.fmtNum(st.load))}" placeholder="—" aria-label="Step ${k + 1} weight"><span>lb</span></span>` : ""}
         <button type="button" class="icon-btn sm" data-w="step-del" data-k="${k}" aria-label="Remove step ${k + 1}"${w.steps.length < 2 ? " disabled" : ""}>${ICON.x}</button></li>`).join("")}</ol>
         <button type="button" class="link" data-w="step-add">${ICON.plus}Add a step</button></div>
@@ -2401,7 +2402,7 @@ function editSlot(rt, slotId, onDone) {
       const g = (k) => { const e = $(`[data-st="${k}"]`, row); return e ? E.num(e.value) : undefined; };
       if (g("sets") !== undefined && g("sets") !== null) st.sets = E.clampSets(g("sets"));
       if (g("secs") !== undefined) st.secs = g("secs");
-      if (g("reps") !== undefined) st.reps = E.normReps({ min: g("reps"), max: g("reps") });
+      if (g("rmin") !== undefined) { const lo = g("rmin"), hi = g("rmax"); st.reps = E.normReps({ min: lo, max: hi === null || hi === undefined ? lo : hi }); }
       if (g("load") !== undefined) st.load = g("load");
     });
   }
