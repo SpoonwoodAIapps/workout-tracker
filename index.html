@@ -565,7 +565,8 @@ html.in-session, html.in-session body { overflow: hidden; }
     ["range-1", "When I hit the top of my reps"], ["manual-1", "Only when I say"]
   ];
   const BJJ_KINDS = ["Gi", "No-gi", "Open mat", "Drilling", "Private", "Competition"];
-  const DEFAULT_SETTINGS = { inc: { free: 5, machine: 10 }, prog: { when: "weeks", every: 1, hold: true }, bjj: { minutes: 60, kind: "Gi" } };
+  const DEFAULT_SETTINGS = { inc: { free: 5, machine: 10, machinePlate: true }, prog: { when: "weeks", every: 1, hold: true }, bjj: { minutes: 60, kind: "Gi" } };
+  const EX_KINDS = ["workout", "physio", "stretch"];
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -645,13 +646,23 @@ html.in-session, html.in-session body { overflow: hidden; }
     const every = Math.max(1, Math.min(12, Math.round(num(q.every) || 1)));
     const by = num(q.by);
     const loop = how === "steps" && exType === "weights" && !!q.loop;
-    return { how, when, every, by: by !== null && by > 0 ? by : null, hold: q.hold !== false, steps, loop };
+    const plate = q.plate === true ? true : q.plate === false ? false : null;
+    return { how, when, every, by: by !== null && by > 0 ? by : null, hold: q.hold !== false, steps, loop, plate };
   }
   function whenLabel(prog) {
     const key = `${prog.when}-${prog.when === "weeks" || prog.when === "sessions" ? prog.every : 1}`;
     const hit = WHEN_OPTIONS.find((o) => o[0] === key);
     if (hit) return hit[1];
     return prog.when === "weeks" ? `Every ${prog.every} weeks` : `Every ${prog.every} workouts`;
+  }
+  // "Next plate": the app says when to go up and you enter the new weight (machine plates differ machine to machine)
+  function plateMode(prog, ex, settings) {
+    if (!(prog.how === "load" || prog.loop) || !ex || ex.type !== "weights") return false;
+    if (prog.plate === true) return true;
+    if (prog.plate === false || prog.by) return false;
+    const st = settings || DEFAULT_SETTINGS;
+    const mp = st.inc && st.inc.machinePlate !== undefined ? st.inc.machinePlate : DEFAULT_SETTINGS.inc.machinePlate;
+    return ex.equip === "machine" && !!mp;
   }
   function increment(prog, ex, settings) {
     if (prog.by) return prog.by;
@@ -665,8 +676,8 @@ html.in-session, html.in-session body { overflow: hidden; }
   function progLabel(p, ex, settings) {
     const prog = normProg(p, ex && ex.type);
     if (prog.how === "none") return "Doesn't progress";
-    const inc = increment(prog, ex, settings);
-    const what = prog.how === "load" ? `+${fmtNum(inc)} lb` : prog.how === "reps" ? `+${inc} rep${inc === 1 ? "" : "s"}` : prog.how === "time" ? `+${inc}s` : prog.loop ? `Next step, then +${fmtNum(inc)} lb and repeat` : "Next step";
+    const inc = increment(prog, ex, settings), plate = plateMode(prog, ex, settings);
+    const what = prog.how === "load" ? (plate ? "Next plate" : `+${fmtNum(inc)} lb`) : prog.how === "reps" ? `+${inc} rep${inc === 1 ? "" : "s"}` : prog.how === "time" ? `+${inc}s` : prog.loop ? `Next step, then ${plate ? "next plate" : `+${fmtNum(inc)} lb`} and repeat` : "Next step";
     const when = whenLabel(prog);
     return `${what}, ${when.charAt(0).toLowerCase() + when.slice(1)}`;
   }
@@ -782,14 +793,15 @@ html.in-session, html.in-session body { overflow: hidden; }
 
     const N = { load: L.load, reps: L.reps ? { min: L.reps.min, max: L.reps.max } : null, secs: L.secs, step: L.step };
     let finalStep = false, wrapped = false;
-    const inc = increment(prog, ex, settings);
+    const inc = increment(prog, ex, settings), plate = plateMode(prog, ex, settings);
+    let plateUp = false;
     if (due) {
-      if (how === "load") { if (L.load === null) due = false; else N.load = r2(L.load + inc); }
+      if (how === "load") { if (L.load === null) due = false; else if (plate) plateUp = true; else N.load = r2(L.load + inc); }
       else if (how === "reps") { const b = L.reps || normReps(slot.reps) || { min: 8, max: 8 }; N.reps = { min: b.min + inc, max: b.max + inc }; }
       else if (how === "time") { const b = L.secs !== null ? L.secs : num(slot.secs) || 0; N.secs = b + inc; }
       else if (how === "steps") {
         if (L.step < steps.length - 1) N.step = L.step + 1;
-        else if (prog.loop) { N.step = 0; wrapped = true; if (L.load !== null) N.load = r2(L.load + inc); }
+        else if (prog.loop) { N.step = 0; wrapped = true; if (L.load !== null) { if (plate) plateUp = true; else N.load = r2(L.load + inc); } }
         else { due = false; finalStep = true; }
       }
     } else if (how === "steps" && !prog.loop && L.step >= steps.length - 1 && steps.length > 1) finalStep = true;
@@ -814,12 +826,14 @@ html.in-session, html.in-session body { overflow: hidden; }
     else if (held) change = "held";
     else change = "same";
     if (change === "up") {
-      if (how === "load") delta = `+${fmtNum(N.load - L.load)} lb`;
+      if (plateUp) delta = "Next plate";
+      else if (how === "load") delta = `+${fmtNum(N.load - L.load)} lb`;
       else if (how === "reps") { const d = N.reps.min - (L.reps ? L.reps.min : N.reps.min - inc); delta = `+${d} rep${d === 1 ? "" : "s"}`; }
       else if (how === "time") delta = `+${fmtNum(N.secs - (L.secs || 0))}s`;
       else if (how === "steps") delta = wrapped ? (L.load !== null ? `+${fmtNum(N.load - L.load)} lb` : `Step 1`) : stepDelta(steps[L.step], steps[N.step], exType, N.step);
     }
-    if (change === "new") hint = borrowed ? `Last done in ${borrowed.title || "another workout"}` : exType === "weights" && t.load === null ? "First time: enter your weight" : "First time";
+    if (plateUp) hint = `Go up one plate from ${fmtNum(L.load)} lb and enter the new weight`;
+    else if (change === "new") hint = borrowed ? `Last done in ${borrowed.title || "another workout"}` : exType === "weights" && t.load === null ? "First time: enter your weight" : "First time";
     else if (change === "set") hint = "Set by you";
     else if (change === "held") hint = "Held: you missed reps last time";
     else if (change === "same") {
@@ -844,17 +858,17 @@ html.in-session, html.in-session body { overflow: hidden; }
           if (lr !== null) reps = Math.max(t.reps.min, Math.min(t.reps.max, lr + (prog.when === "range" ? 1 : 0)));
         }
       }
-      goal.push({ load: t.load, reps, secs: t.secs });
+      goal.push({ load: plateUp ? null : t.load, reps, secs: t.secs });
     }
 
     return {
-      how, when: prog.when, every: prog.every, sets: t.sets, reps: t.reps, secs: t.secs, load: t.load,
+      how, when: prog.when, every: prog.every, sets: t.sets, reps: t.reps, secs: t.secs, load: t.load, plateUp, plateMode: plate,
       step: how === "steps" ? N.step : 0, stepCount: steps.length, change, delta, hint, goal, complete, held, finalStep,
       last: last ? { date: last.log.date, title: last.log.title, item: last.item } : null
     };
   }
   // The part of a target saved with a logged exercise
-  function snapshot(t) { return { sets: t.sets, reps: t.reps, secs: t.secs, load: t.load, step: t.step, stepCount: t.stepCount, how: t.how, when: t.when, every: t.every, change: t.change, delta: t.delta }; }
+  function snapshot(t) { return { sets: t.sets, reps: t.reps, secs: t.secs, load: t.load, step: t.step, stepCount: t.stepCount, how: t.how, when: t.when, every: t.every, change: t.change, delta: t.delta, plateUp: !!t.plateUp }; }
 
   // ---------- The split ----------
   /* Next workout in the split. Each workout fills its place in the current round; doing them out of order still
@@ -988,7 +1002,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     };
   }
   function seedState(rand) {
-    const cop = { id: uid("ex", rand), name: "Copenhagen plank", type: "timed", equip: null, side: true };
+    const cop = { id: uid("ex", rand), name: "Copenhagen plank", type: "timed", equip: null, side: true, kind: "physio" };
     const slot = newSlot(cop.id, { sets: 4, secs: 20, prog: { how: "steps", when: "manual", every: 1, by: null, hold: true, steps: [{ sets: 4, reps: null, secs: 20, load: null }, { sets: 3, reps: null, secs: 30, load: null }] } }, null, rand);
     return {
       exercises: [cop],
@@ -996,7 +1010,8 @@ html.in-session, html.in-session body { overflow: hidden; }
       split: [], settings: clone(DEFAULT_SETTINGS), splitOverride: null
     };
   }
-  function findExercise(exercises, name) { const k = String(name || "").trim().toLowerCase(); return (exercises || []).find((e) => e && String(e.name).trim().toLowerCase() === k) || null; }
+  // Workout exercises, physio exercises and stretches are separate lists: a name only matches within its own kind
+  function findExercise(exercises, name, kind) { const k = String(name || "").trim().toLowerCase(); return (exercises || []).find((e) => e && String(e.name).trim().toLowerCase() === k && (!kind || (e.kind || "workout") === kind)) || null; }
   // A starter split's workouts, reusing exercises he already has by name
   function applyTemplate(key, exercises, settings, rand) {
     const tpl = TEMPLATES.find((t) => t.key === key);
@@ -1005,8 +1020,8 @@ html.in-session, html.in-session body { overflow: hidden; }
     for (const [rname, list] of tpl.routines) {
       const slots = [];
       for (const [name, type, equip, sets, a, b] of list) {
-        let ex = findExercise(all, name);
-        if (!ex) { ex = { id: uid("ex", rand), name, type, equip: type === "weights" ? equip : null, side: false }; all.push(ex); added.push(ex); }
+        let ex = findExercise(all, name, "workout");
+        if (!ex) { ex = { id: uid("ex", rand), name, type, equip: type === "weights" ? equip : null, side: false, kind: "workout" }; all.push(ex); added.push(ex); }
         slots.push(newSlot(ex.id, ex.type === "timed" ? { sets, secs: a } : { sets, reps: { min: a, max: b } }, settings, rand));
       }
       routines.push({ id: uid("rt", rand), name: rname, kind: "workout", slots });
@@ -1015,12 +1030,12 @@ html.in-session, html.in-session body { overflow: hidden; }
   }
 
   const Engine = {
-    TYPES, TYPE_LABEL, TYPE_LETTER, ROUTINE_KINDS, EX_TYPES, HOWS, WHENS, WHEN_OPTIONS, BJJ_KINDS, DEFAULT_SETTINGS, TEMPLATES,
+    TYPES, TYPE_LABEL, TYPE_LETTER, ROUTINE_KINDS, EX_TYPES, EX_KINDS, HOWS, WHENS, WHEN_OPTIONS, BJJ_KINDS, DEFAULT_SETTINGS, TEMPLATES,
     MONTHS, MONTHS_LONG, DOW, DOW_LONG,
     pad, ymd, isDate, addDays, diffDays, dayIndex, weekStart, weeksBetween, monthKey, daysInMonth, addMonths, localToday,
     fmtMD, fmtDay, fmtDayLong, fmtMonth, fmtRange,
     num, r2, eqNum, fmtNum, fmtSecs, fmtMinutes, plural, normReps, clampSets, fmtReps, prescription,
-    defaultHow, normSteps, normProg, whenLabel, increment, progLabel,
+    defaultHow, normSteps, normProg, whenLabel, plateMode, increment, progLabel,
     cmpLog, performed, historyFor, exerciseHistory, latestAnySlot, itemLevel, sameLevel, itemComplete, topOfRange,
     nextTarget, stepDelta, snapshot, splitState, countByType, setsSummary, progressSummary, toCSV, validLog, uid,
     clone, newSlot, seedState, findExercise, applyTemplate
@@ -1102,7 +1117,7 @@ const cur = () => S.edit || S.draft;
 function normExercise(x) {
   if (!x || typeof x.id !== "string" || !String(x.name || "").trim()) return null;
   const type = E.EX_TYPES.includes(x.type) ? x.type : "weights";
-  return { id: x.id, name: String(x.name).trim().slice(0, 80), type, equip: type === "weights" ? (x.equip === "machine" ? "machine" : "free") : null, side: !!x.side };
+  return { id: x.id, name: String(x.name).trim().slice(0, 80), type, equip: type === "weights" ? (x.equip === "machine" ? "machine" : "free") : null, side: !!x.side, kind: E.EX_KINDS.includes(x.kind) ? x.kind : null };
 }
 function normSlot(s, exIds) {
   if (!s || typeof s.id !== "string" || !exIds.has(s.exId)) return null;
@@ -1110,7 +1125,7 @@ function normSlot(s, exIds) {
   return {
     id: s.id, exId: s.exId, sets: E.clampSets(s.sets), reps: E.normReps(s.reps), secs: E.num(s.secs), load: E.num(s.load),
     step: Math.max(0, Math.round(E.num(s.step) || 0)), at: typeof s.at === "string" ? s.at : "", note: typeof s.note === "string" ? s.note.slice(0, 200) : "",
-    prog: { how: E.HOWS.includes(p.how) ? p.how : null, when: E.WHENS.includes(p.when) ? p.when : "weeks", every: Math.max(1, Math.min(12, Math.round(E.num(p.every) || 1))), by: E.num(p.by) > 0 ? E.num(p.by) : null, hold: p.hold !== false, steps: E.normSteps(p.steps), loop: !!p.loop }
+    prog: { how: E.HOWS.includes(p.how) ? p.how : null, when: E.WHENS.includes(p.when) ? p.when : "weeks", every: Math.max(1, Math.min(12, Math.round(E.num(p.every) || 1))), by: E.num(p.by) > 0 ? E.num(p.by) : null, hold: p.hold !== false, steps: E.normSteps(p.steps), loop: !!p.loop, plate: p.plate === true ? true : p.plate === false ? false : null }
   };
 }
 function normPlan(p) {
@@ -1121,6 +1136,10 @@ function normPlan(p) {
     id: r.id, name: String(r.name || "Workout").trim().slice(0, 60) || "Workout", kind: E.ROUTINE_KINDS.includes(r.kind) ? r.kind : "workout",
     slots: (Array.isArray(r.slots) ? r.slots : []).map((s) => normSlot(s, exIds)).filter(Boolean)
   }));
+  // Exercises saved before they had a kind take it from the routines they're in
+  const used = new Map();
+  for (const r of routines) for (const sl of r.slots) { const was = used.get(sl.exId); if (!was || r.kind === "stretch" || (r.kind === "physio" && was === "workout")) used.set(sl.exId, r.kind); }
+  for (const e of exercises) if (!e.kind) e.kind = used.get(e.id) || "workout";
   const rIds = new Set(routines.filter((r) => r.kind === "workout").map((r) => r.id));
   const split = (Array.isArray(d.split) ? d.split : []).filter((x) => x && rIds.has(x.routineId)).map((x) => ({ routineId: x.routineId }));
   const o = d.splitOverride;
@@ -1133,7 +1152,7 @@ function normSettings(x) {
   const pos = (v, dflt) => { const n = E.num(v); return n !== null && n > 0 && n <= 500 ? n : dflt; };
   const p = d.prog || {};
   return {
-    inc: { free: pos(d.inc && d.inc.free, D.inc.free), machine: pos(d.inc && d.inc.machine, D.inc.machine) },
+    inc: { free: pos(d.inc && d.inc.free, D.inc.free), machine: pos(d.inc && d.inc.machine, D.inc.machine), machinePlate: d.inc && typeof d.inc.machinePlate === "boolean" ? d.inc.machinePlate : D.inc.machinePlate },
     prog: { when: E.WHENS.includes(p.when) ? p.when : D.prog.when, every: Math.max(1, Math.min(12, Math.round(E.num(p.every) || 1))), hold: p.hold !== false },
     bjj: { minutes: Math.round(pos(d.bjj && d.bjj.minutes, D.bjj.minutes)), kind: E.BJJ_KINDS.includes(d.bjj && d.bjj.kind) ? d.bjj.kind : D.bjj.kind }
   };
@@ -1152,6 +1171,7 @@ const splitInfo = () => E.splitState(S.plan.split, S.logs, S.plan.splitOverride)
 function nextRoutine() { const s = splitInfo(); return s.next >= 0 ? rtById(s.routineId) : null; }
 function targetFor(slot, ex, date, o) { return E.nextTarget(slot, ex, S.logs, S.settings, date || S.today, o); }
 function exTypeLabel(ex) { return !ex ? "" : ex.type === "weights" ? (ex.equip === "machine" ? "Machine" : "Free weight") : ex.type === "bodyweight" ? "Bodyweight" : "Timed hold"; }
+const EX_KIND_HEAD = { workout: "Workout exercises", physio: "Physio exercises", stretch: "Stretches" };
 function kindNoun(kind, n) { return kind === "stretch" ? plural(n, "stretch", "stretches") : plural(n, "exercise"); }
 
 // ---------- Saving ----------
@@ -1666,7 +1686,7 @@ function cardHtml(it, i, s) {
   const cols = it.exType === "weights" ? "<span>lb</span><span>Reps</span>" : it.exType === "timed" ? "<span>Seconds</span>" : "<span>Reps</span>";
   const wide = it.exType === "weights" ? " two" : "";
   const hint = /^First time: enter/.test(it.hint || "") && it.sets.some((x) => x.load !== null && x.load !== undefined) ? "First time" : it.hint;
-  const meta = [hint && t.change !== "up" ? hint : "", lastText(it, s)].filter(Boolean);
+  const meta = [hint && (t.change !== "up" || t.plateUp) ? hint : "", lastText(it, s)].filter(Boolean);
   const how = t.how || "none";
   const nextSel = how === "none" ? "" : `<label class="next-sel"><span>Next time</span><select data-sf="next"><option value=""${!it.next ? " selected" : ""}>Auto</option><option value="up"${it.next === "up" ? " selected" : ""}>Go up</option><option value="hold"${it.next === "hold" ? " selected" : ""}>Stay the same</option></select></label>`;
   return `<article class="ex${allDone ? " is-done" : ""}" data-i="${i}">
@@ -1682,7 +1702,8 @@ function cardHtml(it, i, s) {
   </article>`;
 }
 function setRow(it, x, si) {
-  const f = (k, label, mode) => `<input class="num" data-sf="${k}" data-s="${si}" inputmode="${mode}" autocomplete="off" enterkeyhint="done" value="${x[k] === null || x[k] === undefined ? "" : esc(E.fmtNum(x[k]))}" aria-label="Set ${si + 1} ${label}">`;
+  const ph = it.target && it.target.plateUp ? ' placeholder="New"' : "";
+  const f = (k, label, mode) => `<input class="num" data-sf="${k}" data-s="${si}" inputmode="${mode}" autocomplete="off" enterkeyhint="done" value="${x[k] === null || x[k] === undefined ? "" : esc(E.fmtNum(x[k]))}"${k === "load" ? ph : ""} aria-label="Set ${si + 1} ${label}">`;
   const cells = it.exType === "weights" ? f("load", "weight in pounds", "decimal") + f("reps", "reps", "numeric") : it.exType === "timed" ? f("secs", "seconds", "numeric") : f("reps", "reps", "numeric");
   return `<div class="set${x.done ? " is-done" : ""}" data-s="${si}"><span class="set-n">${si + 1}</span>${cells}<button class="tick${x.done ? " on" : ""}" data-sa="tick" data-s="${si}" aria-pressed="${x.done}" aria-label="Set ${si + 1} done">${ICON.check}</button></div>`;
 }
@@ -1809,7 +1830,7 @@ function noteSheet(i) {
 function sessionSlot(s, it) { const rt = rtById(s.routineId); return rt ? rt.slots.find((x) => x.id === it.slotId) || null : null; }
 function swapItem(i) {
   const s = cur(), it = s.items[i], rt = rtById(s.routineId), slot = sessionSlot(s, it);
-  pickExercise({ title: `Swap ${it.name} for…`, exclude: it.exId, kind: rt ? rt.kind : "workout" }, (ex) => {
+  pickExercise({ title: `Swap ${it.name} for…`, exclude: it.exId, kind: rt ? rt.kind : s.type }, (ex) => {
     if (!slot || it.added || S.edit) return applySwap(i, ex, "today");
     choiceSheet(`Swap in ${ex.name}`, [["today", "Just today", `${it.name} stays in ${rt.name}`], ["routine", `For good`, `${ex.name} replaces ${it.name} in ${rt.name}`]], (k) => applySwap(i, ex, k));
   });
@@ -2049,7 +2070,8 @@ function progressRows() {
     const done = entries.filter((e) => E.performed(e.item));
     const last = done.length ? done[done.length - 1] : entries[entries.length - 1];
     const ex = exById(id);
-    rows.push({ id, name: ex ? ex.name : last.item.name, last, ps: E.progressSummary(entries), sessions: done.length, date: last.log.date });
+    const kind = ex ? ex.kind : last.log.type === "physio" || last.log.type === "stretch" ? last.log.type : "workout";
+    rows.push({ id, name: ex ? ex.name : last.item.name, kind, last, ps: E.progressSummary(entries), sessions: done.length, date: last.log.date });
   }
   return rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.name.localeCompare(b.name)));
 }
@@ -2057,11 +2079,14 @@ function progressList() {
   const k = S.progQ.trim().toLowerCase();
   const rows = progressRows().filter((r) => !k || r.name.toLowerCase().includes(k));
   if (!rows.length) return `<p class="empty">${k ? "No exercise matches that." : "Log a workout and each exercise's progress shows up here."}</p>`;
-  return `<ul class="loglist">${rows.map((r) => {
+  const one = (r) => {
     const what = E.performed(r.last.item) ? E.setsSummary(r.last.item) : "Skipped";
     const d = r.ps && r.ps.delta && !/^[+−]0(\D|$)/.test(r.ps.delta) ? `<span class="pr-delta${r.ps.delta.startsWith("−") ? " down" : ""}">${esc(r.ps.delta)}</span>` : "";
     return `<li><button class="lrow" data-act="ex-detail" data-id="${esc(r.id)}"><span class="lr-main"><strong>${esc(r.name)}</strong><span>${esc(E.fmtMD(r.date))}: ${esc(what)}</span></span>${d}${ICON.right}</button></li>`;
-  }).join("")}</ul>`;
+  };
+  const kinds = E.EX_KINDS.filter((k) => rows.some((r) => r.kind === k));
+  if (kinds.length < 2) return `<ul class="loglist">${rows.map(one).join("")}</ul>`;
+  return kinds.map((k) => `<section class="sect"><h2 class="h2">${EX_KIND_HEAD[k]}</h2><ul class="loglist">${rows.filter((r) => r.kind === k).map(one).join("")}</ul></section>`).join("");
 }
 function viewProgress() {
   return `<h1 class="page-h">Progress</h1>
@@ -2306,12 +2331,13 @@ function editSlot(rt, slotId, onDone) {
     name: ex.name, kind: kindOf(ex.type, ex.equip), side: ex.side, note: slot.note || "",
     sets: t0.how === "steps" ? E.clampSets(slot.sets) : t0.sets, rmin: (t0.reps || slot.reps || { min: 8 }).min, rmax: (t0.reps || slot.reps || { max: 12 }).max,
     secs: t0.secs !== null ? t0.secs : (slot.secs !== null ? slot.secs : 30), load: t0.load,
-    how: p0.how, when: p0.when, every: p0.every, by: slot.prog.by, hold: p0.hold, steps: clone(p0.steps), step: t0.step, loop: p0.loop
+    how: p0.how, when: p0.when, every: p0.every, by: slot.prog.by, hold: p0.hold, steps: clone(p0.steps), step: t0.step, loop: p0.loop, plate: p0.plate
   };
   if (t0.how === "steps" && t0.reps) { w.rmin = slot.reps ? slot.reps.min : w.rmin; w.rmax = slot.reps ? slot.reps.max : w.rmax; }
   const sh = openSheet({ title: ex.name, tall: true });
   const typeOf = () => (w.kind === "free" || w.kind === "machine" ? "weights" : w.kind);
   const loopOn = () => w.how === "steps" && w.loop && typeOf() === "weights";
+  const plateOn = () => E.plateMode({ how: w.how, loop: loopOn(), plate: w.plate, by: w.by }, { type: typeOf(), equip: w.kind === "machine" ? "machine" : "free" }, S.settings);
   const unit = () => (w.how === "load" || loopOn() ? "lb" : w.how === "reps" ? "reps" : "s");
   function defaultBy() { return w.how === "load" || loopOn() ? (w.kind === "machine" ? S.settings.inc.machine : S.settings.inc.free) : w.how === "reps" ? 1 : 5; }
   function fixHow() {
@@ -2340,7 +2366,7 @@ function editSlot(rt, slotId, onDone) {
         ${timed ? field("Seconds", `<span class="unit-in"><input id="se-secs" inputmode="numeric" pattern="[0-9]*" value="${esc(w.secs)}"><span>s</span></span>`)
           : `<div class="field"><span class="field-l">Reps</span><span class="range-in"><input id="se-rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmin)}" aria-label="Fewest reps"><span>to</span><input id="se-rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmax)}" aria-label="Most reps"></span></div>`}
       </div>`;
-    const load = type === "weights" ? field("Weight next time", `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="Not set"><span>lb</span></span>`, w.how === "steps" && !loopOn() ? "Used by any step without its own weight." : "") : "";
+    const load = type === "weights" ? field(t0.plateUp ? "Weight now" : "Weight next time", `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="Not set"><span>lb</span></span>`, t0.plateUp ? "Next session goes up one plate from this. If you know the new weight, type it here instead." : w.how === "steps" && !loopOn() ? "Used by any step without its own weight." : "") : "";
     const steps = w.how !== "steps" ? "" : `<div class="field"><span class="field-l">Steps</span>${timed ? "" : `<span class="field-h">Sets × reps. Fill in the second reps box for a range, like 8 to 12.</span>`}<ol class="steps">${w.steps.map((st, k) => `<li class="steprow" data-k="${k}"><span class="step-n">${k + 1}</span>
         <input data-st="sets" inputmode="numeric" pattern="[0-9]*" value="${st.sets}" aria-label="Step ${k + 1} sets"><span class="x">×</span>
         ${timed ? `<span class="unit-in sm"><input data-st="secs" inputmode="numeric" pattern="[0-9]*" value="${esc(st.secs === null ? "" : st.secs)}" aria-label="Step ${k + 1} seconds"><span>s</span></span>`
@@ -2353,7 +2379,9 @@ function editSlot(rt, slotId, onDone) {
     const prog = `<div class="field"><span class="field-l">How it goes up</span>${chips("how", HOW_CHOICES[type], w.how)}</div>
       ${steps}
       ${w.how === "none" ? "" : field("When", `<select id="se-when">${whenOpts.map(([k, l]) => `<option value="${k}"${k === whenKey ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
-      ${["load", "reps", "time"].includes(w.how) || loopOn() ? field(loopOn() ? "Weight added after the last step" : "Each time, add", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>${unit()}</span></span>`, w.how === "load" || loopOn() ? `Leave blank to use your ${w.kind === "machine" ? "machine" : "free-weight"} default (${E.fmtNum(defaultBy())} lb, in Settings).` : "") : ""}
+      ${(w.how === "load" || loopOn()) ? `<div class="field"><span class="field-l">${loopOn() ? "Weight added after the last step" : "Each time, add"}</span>${chips("inc", [["amount", "An amount"], ["plate", "Next plate"]], plateOn() ? "plate" : "amount")}</div>
+        ${plateOn() ? `<p class="muted small">When it's time to go up, it says Next plate. Type the new weight in that session and it goes on from there.</p>` : field("Amount", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>lb</span></span>`, `Leave blank to use your ${w.kind === "machine" ? "machine" : "free-weight"} default (${E.fmtNum(defaultBy())} lb, in Settings).`)}`
+        : ["reps", "time"].includes(w.how) ? field("Each time, add", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>${unit()}</span></span>`) : ""}
       ${w.how === "none" || w.when === "manual" ? "" : `<label class="check"><input type="checkbox" id="se-hold"${w.hold ? " checked" : ""}><span>${timed ? "Hold if I cut a set short" : "Hold if I miss reps"}</span></label>`}
       ${w.when === "manual" && w.how !== "none" ? `<p class="muted small">In a session, set Next time to Go up when you're ready.</p>` : ""}`;
     sh.setTitle(w.name || ex.name);
@@ -2368,6 +2396,7 @@ function editSlot(rt, slotId, onDone) {
     wireChips(sh.body, "kind", (v) => { read(); w.kind = v; if (typeOf() !== "weights") w.load = null; draw(); });
     wireChips(sh.body, "how", (v) => { read(); w.how = v; draw(); });
     wireChips(sh.body, "loop", (v) => { read(); w.loop = v === "loop"; draw(); });
+    wireChips(sh.body, "inc", (v) => { read(); w.plate = v === "plate"; draw(); });
     const whenSel = $("#se-when", sh.body);
     if (whenSel) whenSel.onchange = () => { read(); const [k, n] = whenSel.value.split("-"); w.when = k; w.every = Number(n) || 1; draw(); };
     $$("[data-w]", sh.body).forEach((b) => {
@@ -2433,7 +2462,7 @@ function editSlot(rt, slotId, onDone) {
     // Its place in this routine
     const reps = timed ? null : E.normReps({ min: w.rmin, max: w.rmax === null ? w.rmin : w.rmax });
     const secs = timed ? Math.round(w.secs || 30) : null;
-    const prog = { how: w.how, when: w.how === "none" ? "weeks" : w.when, every: w.every, by: w.by, hold: w.hold, steps: w.how === "steps" ? E.normSteps(w.steps) : (slot.prog.steps || []), loop: w.how === "steps" && type === "weights" && !!w.loop };
+    const prog = { how: w.how, when: w.how === "none" ? "weeks" : w.when, every: w.every, by: w.by, hold: w.hold, steps: w.how === "steps" ? E.normSteps(w.steps) : (slot.prog.steps || []), loop: w.how === "steps" && type === "weights" && !!w.loop, plate: w.plate === true ? true : w.plate === false ? false : null };
     const np = E.normProg(prog, type);
     const t = E.snapshot(t0);
     const changed = oldType !== type || np.how !== p0.how
@@ -2467,13 +2496,14 @@ function pickExercise(o, cb) {
   const q = $("#px-q", sh.body);
   function draw() {
     const v = q.value.trim(), k = v.toLowerCase();
-    const exact = v ? E.findExercise(S.plan.exercises, v) : null;
-    let list = S.plan.exercises.filter((e) => e.id !== o.exclude && (!k || e.name.toLowerCase().includes(k)));
+    const kind = E.EX_KINDS.includes(o.kind) ? o.kind : "workout";
+    const exact = v ? E.findExercise(S.plan.exercises, v, kind) : null;
+    let list = S.plan.exercises.filter((e) => e.kind === kind && e.id !== o.exclude && (!k || e.name.toLowerCase().includes(k)));
     const fit = (e) => (o.kind === "stretch" ? e.type === "timed" : true);
     list = list.sort((a, b) => (fit(b) - fit(a)) || a.name.localeCompare(b.name));
     $("#px-list", sh.body).innerHTML = (v && !exact ? `<button class="choice" data-new>${ICON.plus}<span class="choice-main"><strong>Create “${esc(v)}”</strong><span>New exercise</span></span></button>` : "") +
       list.map((e) => `<button class="choice" data-id="${esc(e.id)}"><span class="choice-main"><strong>${esc(e.name)}</strong><span>${esc(exTypeLabel(e))}${e.side ? ", each side" : ""}</span></span></button>`).join("") +
-      (!list.length && !v ? `<p class="empty">Type a name to create your first one.</p>` : "");
+      (!list.length && !v ? `<p class="empty">No ${esc(EX_KIND_HEAD[kind].toLowerCase())} yet. Type a name to create one.</p>` : "");
     $$("[data-id]", sh.body).forEach((b) => { b.onclick = () => { sh.close(true); cb(exById(b.dataset.id)); }; });
     const nb = $("[data-new]", sh.body); if (nb) nb.onclick = () => newExerciseForm(sh, v, o.kind, cb);
   }
@@ -2487,7 +2517,7 @@ function pickExercise(o, cb) {
   if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => q.focus(), 60);
 }
 function newExerciseForm(sh, name, kind, cb) {
-  sh.setTitle("New exercise");
+  sh.setTitle(kind === "stretch" ? "New stretch" : kind === "physio" ? "New physio exercise" : "New exercise");
   sh.body.innerHTML = field("Name", `<input id="nx-name" maxlength="80" autocomplete="off" value="${esc(name)}">`) +
     `<div class="field"><span class="field-l">Kind</span>${chips("nk", KIND_CHOICES, kind === "stretch" ? "timed" : "free")}</div>
     <label class="check"><input type="checkbox" id="nx-side"><span>Each side</span></label><p class="form-err" id="nx-err" role="alert" hidden></p>`;
@@ -2496,11 +2526,12 @@ function newExerciseForm(sh, name, kind, cb) {
   $("#nx-go", sh.foot).onclick = () => {
     const nm = $("#nx-name", sh.body).value.trim();
     if (!nm) { const e = $("#nx-err", sh.body); e.textContent = "Give it a name."; e.hidden = false; return; }
-    let ex = E.findExercise(S.plan.exercises, nm);
+    const exKind = E.EX_KINDS.includes(kind) ? kind : "workout";
+    let ex = E.findExercise(S.plan.exercises, nm, exKind);
     if (!ex) {
       const k = chipValue(sh.body, "nk") || "free";
       const type = k === "free" || k === "machine" ? "weights" : k;
-      ex = { id: uid("ex"), name: nm.slice(0, 80), type, equip: type === "weights" ? k : null, side: $("#nx-side", sh.body).checked };
+      ex = { id: uid("ex"), name: nm.slice(0, 80), type, equip: type === "weights" ? k : null, side: $("#nx-side", sh.body).checked, kind: exKind };
       S.plan.exercises.push(ex); savePlan();
     }
     sh.close(true); cb(ex);
@@ -2513,7 +2544,8 @@ function openExercises() {
   function draw() {
     const used = (id) => S.plan.routines.filter((r) => r.slots.some((s) => s.exId === id)).map((r) => r.name);
     const list = S.plan.exercises.slice().sort((a, b) => a.name.localeCompare(b.name));
-    sh.body.innerHTML = list.length ? `<div class="choices">${list.map((e) => { const u = used(e.id); return `<button class="choice" data-id="${esc(e.id)}"><span class="choice-main"><strong>${esc(e.name)}</strong><span>${esc(exTypeLabel(e))}${e.side ? ", each side" : ""}${u.length ? `. In ${u.join(", ")}` : ""}</span></span>${ICON.right}</button>`; }).join("")}</div>` : `<p class="empty">No exercises yet. Add them to a workout from Plan.</p>`;
+    const row = (e) => { const u = used(e.id); return `<button class="choice" data-id="${esc(e.id)}"><span class="choice-main"><strong>${esc(e.name)}</strong><span>${esc(exTypeLabel(e))}${e.side ? ", each side" : ""}${u.length ? `. In ${u.join(", ")}` : ""}</span></span>${ICON.right}</button>`; };
+    sh.body.innerHTML = list.length ? E.EX_KINDS.filter((k) => list.some((e) => e.kind === k)).map((k) => `<h3 class="h3 sec">${EX_KIND_HEAD[k]}</h3><div class="choices">${list.filter((e) => e.kind === k).map(row).join("")}</div>`).join("") : `<p class="empty">No exercises yet. Add them to a workout from Plan.</p>`;
     $$("[data-id]", sh.body).forEach((b) => { b.onclick = () => exerciseForm(exById(b.dataset.id), draw); });
   }
   draw();
@@ -2525,6 +2557,7 @@ function exerciseForm(ex, onDone) {
   sh.body.innerHTML = field("Name", `<input id="xf-name" maxlength="80" autocomplete="off" value="${esc(ex.name)}">`) +
     `<div class="field"><span class="field-l">Kind</span>${chips("xk", KIND_CHOICES, kindOf(ex.type, ex.equip))}</div>
     <label class="check"><input type="checkbox" id="xf-side"${ex.side ? " checked" : ""}><span>Each side</span></label>
+    <p class="muted small">In your ${esc(EX_KIND_HEAD[ex.kind].toLowerCase())}. It can only be added to ${ex.kind === "workout" ? "workouts" : ex.kind === "physio" ? "physio routines" : "stretch routines"}.</p>
     ${!inUse ? `<button class="btn ghost danger-text block" id="xf-del">${ICON.trash}Delete exercise</button>` : `<p class="muted small">To delete it, take it out of your routines first.</p>`}`;
   wireChips(sh.body, "xk", () => {});
   sh.setFoot(`<button class="btn red block" id="xf-save">Save</button>`);
@@ -2552,8 +2585,9 @@ async function openSettings() {
   const storage = DB.mode === "memory" ? "This browser isn't saving anything (Private Browsing?). Open the app normally to keep your log."
     : persisted ? "Saved on this phone. The browser keeps it until you delete the app." : "Saved on this phone. Download a backup now and then, in case the browser clears its storage.";
   sh.body.innerHTML = `<h3 class="h3 sec">Weight increments</h3>
-    <div class="grid2">${field("Free weights", `<span class="unit-in"><input id="st-free" inputmode="decimal" value="${esc(E.fmtNum(st.inc.free))}"><span>lb</span></span>`)}${field("Machines", `<span class="unit-in"><input id="st-machine" inputmode="decimal" value="${esc(E.fmtNum(st.inc.machine))}"><span>lb</span></span>`)}</div>
-    <p class="muted small">How much weight goes on each time, unless an exercise has its own amount.</p>
+    <div class="grid2">${field("Free weights", `<span class="unit-in"><input id="st-free" inputmode="decimal" value="${esc(E.fmtNum(st.inc.free))}"><span>lb</span></span>`)}${field("Machines", `<span class="unit-in"><input id="st-machine" inputmode="decimal" value="${esc(E.fmtNum(st.inc.machine))}"${st.inc.machinePlate ? " disabled" : ""}><span>lb</span></span>`)}</div>
+    <label class="check"><input type="checkbox" id="st-plate"${st.inc.machinePlate ? " checked" : ""}><span>On machines, say Next plate and let me enter the new weight</span></label>
+    <p class="muted small">How much weight goes on each time, unless an exercise has its own setting. With Next plate, the app tells you when to go up and you type the weight you moved to.</p>
     <h3 class="h3 sec">New exercises</h3>
     ${field("Go up", `<select id="st-when">${E.WHEN_OPTIONS.map(([k, l]) => `<option value="${k}"${k === whenKey ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
     <label class="check"><input type="checkbox" id="st-hold"${st.prog.hold ? " checked" : ""}><span>Hold the weight if I miss reps</span></label>
@@ -2572,6 +2606,7 @@ async function openSettings() {
   const posNum = (id, max) => { const n = E.num($(id, B).value); return n !== null && n > 0 && n <= max ? n : null; };
   $("#st-free", B).onchange = () => { const n = posNum("#st-free", 500); if (n) { st.inc.free = n; saveSettings(); } else $("#st-free", B).value = E.fmtNum(st.inc.free); };
   $("#st-machine", B).onchange = () => { const n = posNum("#st-machine", 500); if (n) { st.inc.machine = n; saveSettings(); } else $("#st-machine", B).value = E.fmtNum(st.inc.machine); };
+  $("#st-plate", B).onchange = (e) => { st.inc.machinePlate = e.target.checked; $("#st-machine", B).disabled = e.target.checked; saveSettings(); };
   $("#st-when", B).onchange = (e) => { const [k, n] = e.target.value.split("-"); st.prog.when = k; st.prog.every = Number(n) || 1; saveSettings(); };
   $("#st-hold", B).onchange = (e) => { st.prog.hold = e.target.checked; saveSettings(); };
   $("#st-bjj", B).onchange = () => { const n = posNum("#st-bjj", 600); if (n) { st.bjj.minutes = Math.round(n); saveSettings(); } else $("#st-bjj", B).value = st.bjj.minutes; };

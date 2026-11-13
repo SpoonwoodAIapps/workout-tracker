@@ -1,6 +1,6 @@
 /* Offline support: the app opens without a connection; new versions arrive the next time it opens online.
    Only touches its own caches (workout-tracker-*), so other apps on this site are left alone. */
-const CACHE = "workout-tracker-20d229dbbb";
+const CACHE = "workout-tracker-eedfa46cb4";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./apple-touch-icon.png", "./icon-192.png", "./icon-512.png", "./favicon.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
