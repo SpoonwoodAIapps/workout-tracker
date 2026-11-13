@@ -643,7 +643,8 @@ html.in-session, html.in-session body { overflow: hidden; }
     if (when === "range" && how !== "load") when = how === "steps" ? "manual" : "session";
     const every = Math.max(1, Math.min(12, Math.round(num(q.every) || 1)));
     const by = num(q.by);
-    return { how, when, every, by: by !== null && by > 0 ? by : null, hold: q.hold !== false, steps };
+    const loop = how === "steps" && exType === "weights" && !!q.loop;
+    return { how, when, every, by: by !== null && by > 0 ? by : null, hold: q.hold !== false, steps, loop };
   }
   function whenLabel(prog) {
     const key = `${prog.when}-${prog.when === "weeks" || prog.when === "sessions" ? prog.every : 1}`;
@@ -654,7 +655,7 @@ html.in-session, html.in-session body { overflow: hidden; }
   function increment(prog, ex, settings) {
     if (prog.by) return prog.by;
     const st = settings || DEFAULT_SETTINGS;
-    if (prog.how === "load") return num(ex && ex.equip === "machine" ? st.inc && st.inc.machine : st.inc && st.inc.free) || (ex && ex.equip === "machine" ? 10 : 5);
+    if (prog.how === "load" || prog.loop) return num(ex && ex.equip === "machine" ? st.inc && st.inc.machine : st.inc && st.inc.free) || (ex && ex.equip === "machine" ? 10 : 5);
     if (prog.how === "reps") return 1;
     if (prog.how === "time") return 5;
     return 0;
@@ -664,7 +665,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     const prog = normProg(p, ex && ex.type);
     if (prog.how === "none") return "Doesn't progress";
     const inc = increment(prog, ex, settings);
-    const what = prog.how === "load" ? `+${fmtNum(inc)} lb` : prog.how === "reps" ? `+${inc} rep${inc === 1 ? "" : "s"}` : prog.how === "time" ? `+${inc}s` : "Next step";
+    const what = prog.how === "load" ? `+${fmtNum(inc)} lb` : prog.how === "reps" ? `+${inc} rep${inc === 1 ? "" : "s"}` : prog.how === "time" ? `+${inc}s` : prog.loop ? `Next step, then +${fmtNum(inc)} lb and repeat` : "Next step";
     const when = whenLabel(prog);
     return `${what}, ${when.charAt(0).toLowerCase() + when.slice(1)}`;
   }
@@ -698,8 +699,9 @@ html.in-session, html.in-session body { overflow: hidden; }
     const loads = (item.sets || []).filter((s) => s && s.done).map((s) => num(s.load)).filter((x) => x !== null);
     return { load: loads.length ? Math.max(...loads) : num(t.load), reps: normReps(t.reps), secs: num(t.secs), step: Math.max(0, Math.round(num(t.step) || 0)) };
   }
-  function sameLevel(a, b, how) {
+  function sameLevel(a, b, how, loop) {
     if (how === "load") return eqNum(a.load, b.load);
+    if (how === "steps" && loop) return a.step === b.step && eqNum(a.load, b.load);
     if (how === "reps") return !!a.reps && !!b.reps && a.reps.min === b.reps.min && a.reps.max === b.reps.max;
     if (how === "time") return eqNum(a.secs, b.secs);
     if (how === "steps") return a.step === b.step;
@@ -724,6 +726,17 @@ html.in-session, html.in-session body { overflow: hidden; }
     if (!r) return false;
     const need = clampSets(t.sets || (item.sets || []).length);
     return (item.sets || []).filter((s) => s && s.done && num(s.reps) !== null && num(s.reps) >= r.max).length >= need;
+  }
+
+  function stepDelta(a, b, exType, idx) {
+    if (!a || !b) return `Step ${idx + 1}`;
+    const parts = [];
+    let down = false;
+    if (b.sets !== a.sets) { if (b.sets < a.sets) down = true; else parts.push(`+${b.sets - a.sets} set${b.sets - a.sets === 1 ? "" : "s"}`); }
+    if (exType === "timed") { const d = (b.secs || 0) - (a.secs || 0); if (d < 0) down = true; else if (d > 0) parts.push(`+${d}s`); }
+    else if (a.reps && b.reps && b.reps.min !== a.reps.min) { const d = b.reps.min - a.reps.min; if (d < 0) down = true; else parts.push(`+${d} rep${d === 1 ? "" : "s"}`); }
+    if (exType === "weights" && a.load !== null && a.load !== undefined && b.load !== null && b.load !== undefined && !eqNum(a.load, b.load)) { const d = b.load - a.load; if (d < 0) down = true; else parts.push(`+${fmtNum(d)} lb`); }
+    return down || !parts.length ? `Step ${idx + 1}` : parts.join(", ");
   }
 
   /* The target for an exercise's next session, worked out from what was done last time and its progression rule.
@@ -752,7 +765,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     } else {
       L = itemLevel(P.item);
       if (how === "steps") L.step = clampStep(L.step);
-      for (let i = since.length - 1; i >= 0 && sameLevel(itemLevel(since[i].item), L, how); i--) { runStart = since[i].log.date; runCount++; }
+      for (let i = since.length - 1; i >= 0 && sameLevel(itemLevel(since[i].item), L, how, prog.loop); i--) { runStart = since[i].log.date; runCount++; }
       complete = itemComplete(P.item);
       const ov = P.item.next;
       if (how === "none") due = false;
@@ -767,20 +780,24 @@ html.in-session, html.in-session body { overflow: hidden; }
     }
 
     const N = { load: L.load, reps: L.reps ? { min: L.reps.min, max: L.reps.max } : null, secs: L.secs, step: L.step };
-    let finalStep = false;
+    let finalStep = false, wrapped = false;
     const inc = increment(prog, ex, settings);
     if (due) {
       if (how === "load") { if (L.load === null) due = false; else N.load = r2(L.load + inc); }
       else if (how === "reps") { const b = L.reps || normReps(slot.reps) || { min: 8, max: 8 }; N.reps = { min: b.min + inc, max: b.max + inc }; }
       else if (how === "time") { const b = L.secs !== null ? L.secs : num(slot.secs) || 0; N.secs = b + inc; }
-      else if (how === "steps") { if (L.step < steps.length - 1) N.step = L.step + 1; else { due = false; finalStep = true; } }
-    } else if (how === "steps" && L.step >= steps.length - 1 && steps.length > 1) finalStep = true;
+      else if (how === "steps") {
+        if (L.step < steps.length - 1) N.step = L.step + 1;
+        else if (prog.loop) { N.step = 0; wrapped = true; if (L.load !== null) N.load = r2(L.load + inc); }
+        else { due = false; finalStep = true; }
+      }
+    } else if (how === "steps" && !prog.loop && L.step >= steps.length - 1 && steps.length > 1) finalStep = true;
 
     const cfgReps = normReps(slot.reps), cfgSecs = num(slot.secs), cfgSets = clampSets(slot.sets);
     let t;
     if (how === "steps") {
       const st = steps[N.step];
-      t = { sets: st.sets, reps: exType === "timed" ? null : st.reps || cfgReps, secs: exType === "timed" ? (st.secs !== null ? st.secs : cfgSecs) : null, load: exType === "weights" ? (st.load !== null ? st.load : N.load) : null };
+      t = { sets: st.sets, reps: exType === "timed" ? null : st.reps || cfgReps, secs: exType === "timed" ? (st.secs !== null ? st.secs : cfgSecs) : null, load: exType === "weights" ? (st.load !== null && !prog.loop ? st.load : N.load) : null };
     } else {
       t = {
         sets: cfgSets,
@@ -799,7 +816,7 @@ html.in-session, html.in-session body { overflow: hidden; }
       if (how === "load") delta = `+${fmtNum(N.load - L.load)} lb`;
       else if (how === "reps") { const d = N.reps.min - (L.reps ? L.reps.min : N.reps.min - inc); delta = `+${d} rep${d === 1 ? "" : "s"}`; }
       else if (how === "time") delta = `+${fmtNum(N.secs - (L.secs || 0))}s`;
-      else if (how === "steps") delta = `Step ${N.step + 1}`;
+      else if (how === "steps") delta = wrapped ? (L.load !== null ? `+${fmtNum(N.load - L.load)} lb` : `Step 1`) : stepDelta(steps[L.step], steps[N.step], exType, N.step);
     }
     if (change === "new") hint = borrowed ? `Last done in ${borrowed.title || "another workout"}` : exType === "weights" && t.load === null ? "First time: enter your weight" : "First time";
     else if (change === "set") hint = "Set by you";
@@ -1004,7 +1021,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     num, r2, eqNum, fmtNum, fmtSecs, fmtMinutes, plural, normReps, clampSets, fmtReps, prescription,
     defaultHow, normSteps, normProg, whenLabel, increment, progLabel,
     cmpLog, performed, historyFor, exerciseHistory, latestAnySlot, itemLevel, sameLevel, itemComplete, topOfRange,
-    nextTarget, snapshot, splitState, countByType, setsSummary, progressSummary, toCSV, validLog, uid,
+    nextTarget, stepDelta, snapshot, splitState, countByType, setsSummary, progressSummary, toCSV, validLog, uid,
     clone, newSlot, seedState, findExercise, applyTemplate
   };
   if (typeof module !== "undefined" && module.exports) module.exports = Engine;
@@ -1092,7 +1109,7 @@ function normSlot(s, exIds) {
   return {
     id: s.id, exId: s.exId, sets: E.clampSets(s.sets), reps: E.normReps(s.reps), secs: E.num(s.secs), load: E.num(s.load),
     step: Math.max(0, Math.round(E.num(s.step) || 0)), at: typeof s.at === "string" ? s.at : "", note: typeof s.note === "string" ? s.note.slice(0, 200) : "",
-    prog: { how: E.HOWS.includes(p.how) ? p.how : null, when: E.WHENS.includes(p.when) ? p.when : "weeks", every: Math.max(1, Math.min(12, Math.round(E.num(p.every) || 1))), by: E.num(p.by) > 0 ? E.num(p.by) : null, hold: p.hold !== false, steps: E.normSteps(p.steps) }
+    prog: { how: E.HOWS.includes(p.how) ? p.how : null, when: E.WHENS.includes(p.when) ? p.when : "weeks", every: Math.max(1, Math.min(12, Math.round(E.num(p.every) || 1))), by: E.num(p.by) > 0 ? E.num(p.by) : null, hold: p.hold !== false, steps: E.normSteps(p.steps), loop: !!p.loop }
   };
 }
 function normPlan(p) {
@@ -1642,7 +1659,8 @@ function cardHtml(it, i, s) {
       ${more}</article>`;
   }
   const steps = t.how === "steps" && t.stepCount > 1;
-  const tag = t.change === "up" && t.delta && !steps ? `<span class="tag up">${esc(t.delta)}</span>` : t.change === "held" ? `<span class="tag held">Held</span>` : "";
+  const plainStep = /^Step \d/.test(t.delta || "");
+  const tag = t.change === "up" && t.delta && !(steps && plainStep) ? `<span class="tag up">${esc(t.delta)}</span>` : t.change === "held" ? `<span class="tag held">Held</span>` : "";
   const origin = it.swappedFrom ? `<p class="ex-origin">${ICON.swap}Swapped in for ${esc((exById(it.swappedFrom) || {}).name || "another exercise")}</p>` : it.added ? `<p class="ex-origin">${ICON.plus}Added for this session</p>` : "";
   const cols = it.exType === "weights" ? "<span>lb</span><span>Reps</span>" : it.exType === "timed" ? "<span>Seconds</span>" : "<span>Reps</span>";
   const wide = it.exType === "weights" ? " two" : "";
@@ -1651,7 +1669,7 @@ function cardHtml(it, i, s) {
   const how = t.how || "none";
   const nextSel = how === "none" ? "" : `<label class="next-sel"><span>Next time</span><select data-sf="next"><option value=""${!it.next ? " selected" : ""}>Auto</option><option value="up"${it.next === "up" ? " selected" : ""}>Go up</option><option value="hold"${it.next === "hold" ? " selected" : ""}>Stay the same</option></select></label>`;
   return `<article class="ex${allDone ? " is-done" : ""}" data-i="${i}">
-    <div class="ex-head"><div class="ex-title"><h3>${esc(it.name)}</h3><p class="ex-pres">${esc(pres)}${steps ? ` <span class="${t.change === "up" ? "tag up" : "step"}">Step ${t.step + 1} of ${t.stepCount}</span>` : ""}${tag}</p>${origin}</div>${more}</div>
+    <div class="ex-head"><div class="ex-title"><h3>${esc(it.name)}</h3><p class="ex-pres">${esc(pres)}${steps ? ` <span class="${t.change === "up" && plainStep ? "tag up" : "step"}">Step ${t.step + 1} of ${t.stepCount}</span>` : ""}${tag}</p>${origin}</div>${more}</div>
     ${it.plan ? `<p class="ex-plan">${esc(it.plan)}</p>` : ""}
     <div class="sets${wide}" role="group" aria-label="Sets for ${esc(it.name)}">
       <div class="set-h"><span>Set</span>${cols}<span></span></div>
@@ -2287,24 +2305,30 @@ function editSlot(rt, slotId, onDone) {
     name: ex.name, kind: kindOf(ex.type, ex.equip), side: ex.side, note: slot.note || "",
     sets: t0.how === "steps" ? E.clampSets(slot.sets) : t0.sets, rmin: (t0.reps || slot.reps || { min: 8 }).min, rmax: (t0.reps || slot.reps || { max: 12 }).max,
     secs: t0.secs !== null ? t0.secs : (slot.secs !== null ? slot.secs : 30), load: t0.load,
-    how: p0.how, when: p0.when, every: p0.every, by: slot.prog.by, hold: p0.hold, steps: clone(p0.steps), step: t0.step
+    how: p0.how, when: p0.when, every: p0.every, by: slot.prog.by, hold: p0.hold, steps: clone(p0.steps), step: t0.step, loop: p0.loop
   };
   if (t0.how === "steps" && t0.reps) { w.rmin = slot.reps ? slot.reps.min : w.rmin; w.rmax = slot.reps ? slot.reps.max : w.rmax; }
   const sh = openSheet({ title: ex.name, tall: true });
   const typeOf = () => (w.kind === "free" || w.kind === "machine" ? "weights" : w.kind);
-  const unit = () => (w.how === "load" ? "lb" : w.how === "reps" ? "reps" : "s");
-  function defaultBy() { return w.how === "load" ? (w.kind === "machine" ? S.settings.inc.machine : S.settings.inc.free) : w.how === "reps" ? 1 : 5; }
+  const loopOn = () => w.how === "steps" && w.loop && typeOf() === "weights";
+  const unit = () => (w.how === "load" || loopOn() ? "lb" : w.how === "reps" ? "reps" : "s");
+  function defaultBy() { return w.how === "load" || loopOn() ? (w.kind === "machine" ? S.settings.inc.machine : S.settings.inc.free) : w.how === "reps" ? 1 : 5; }
   function fixHow() {
     const ok = HOW_CHOICES[typeOf()].map((x) => x[0]);
     if (!ok.includes(w.how)) w.how = E.defaultHow(typeOf());
     if (w.when === "range" && w.how !== "load") w.when = "weeks";
     if (w.how === "steps" && !w.steps.length) {
-      const timed = typeOf() === "timed";
-      w.steps = [{ sets: w.sets, reps: timed ? null : { min: w.rmin, max: w.rmax }, secs: timed ? w.secs : null, load: null }, { sets: w.sets, reps: timed ? null : { min: w.rmin + 2, max: w.rmax + 2 }, secs: timed ? w.secs + 10 : null, load: null }];
+      const timed = typeOf() === "timed", lo = Math.round(w.rmin || 8), hi = Math.round(w.rmax || lo);
+      if (typeOf() === "weights" && hi > lo && hi - lo <= 7) {
+        // A rep range becomes a ladder: 6, 7, 8 reps, then more weight and back to 6
+        w.steps = [];
+        for (let r = lo; r <= hi; r++) w.steps.push({ sets: w.sets, reps: { min: r, max: r }, secs: null, load: null });
+        w.loop = true;
+      } else w.steps = [{ sets: w.sets, reps: timed ? null : { min: lo, max: lo }, secs: timed ? w.secs : null, load: null }, { sets: w.sets, reps: timed ? null : { min: lo + 2, max: lo + 2 }, secs: timed ? w.secs + 10 : null, load: null }];
       w.step = 0;
     }
   }
-  function stepText(st) { return `${st.sets} × ${typeOf() === "timed" ? E.fmtSecs(st.secs) : E.fmtReps(st.reps)}${st.load !== null && st.load !== undefined && typeOf() === "weights" ? ` at ${E.fmtNum(st.load)} lb` : ""}`; }
+  function stepText(st) { return `${st.sets} × ${typeOf() === "timed" ? E.fmtSecs(st.secs) : E.fmtReps(st.reps)}${st.load !== null && st.load !== undefined && typeOf() === "weights" && !loopOn() ? ` at ${E.fmtNum(st.load)} lb` : ""}`; }
   function draw() {
     fixHow();
     const type = typeOf(), timed = type === "timed";
@@ -2315,31 +2339,34 @@ function editSlot(rt, slotId, onDone) {
         ${timed ? field("Seconds", `<span class="unit-in"><input id="se-secs" inputmode="numeric" pattern="[0-9]*" value="${esc(w.secs)}"><span>s</span></span>`)
           : `<div class="field"><span class="field-l">Reps</span><span class="range-in"><input id="se-rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmin)}" aria-label="Fewest reps"><span>to</span><input id="se-rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmax)}" aria-label="Most reps"></span></div>`}
       </div>`;
-    const load = type === "weights" ? field("Weight next time", `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="Not set"><span>lb</span></span>`, w.how === "steps" ? "Used by any step without its own weight." : "") : "";
+    const load = type === "weights" ? field("Weight next time", `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="Not set"><span>lb</span></span>`, w.how === "steps" && !loopOn() ? "Used by any step without its own weight." : "") : "";
     const steps = w.how !== "steps" ? "" : `<div class="field"><span class="field-l">Steps</span><ol class="steps">${w.steps.map((st, k) => `<li class="steprow" data-k="${k}"><span class="step-n">${k + 1}</span>
         <input data-st="sets" inputmode="numeric" pattern="[0-9]*" value="${st.sets}" aria-label="Step ${k + 1} sets"><span class="x">×</span>
         ${timed ? `<span class="unit-in sm"><input data-st="secs" inputmode="numeric" pattern="[0-9]*" value="${esc(st.secs === null ? "" : st.secs)}" aria-label="Step ${k + 1} seconds"><span>s</span></span>`
-          : `<span class="range-in sm"><input data-st="rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.min : "")}" aria-label="Step ${k + 1} fewest reps"><span>–</span><input data-st="rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.max : "")}" aria-label="Step ${k + 1} most reps"></span>`}
-        ${type === "weights" ? `<span class="unit-in sm"><input data-st="load" inputmode="decimal" value="${esc(st.load === null || st.load === undefined ? "" : E.fmtNum(st.load))}" placeholder="—" aria-label="Step ${k + 1} weight"><span>lb</span></span>` : ""}
+          : `<span class="unit-in sm"><input data-st="reps" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.min : "")}" aria-label="Step ${k + 1} reps"><span>reps</span></span>`}
+        ${type === "weights" && !loopOn() ? `<span class="unit-in sm"><input data-st="load" inputmode="decimal" value="${esc(st.load === null || st.load === undefined ? "" : E.fmtNum(st.load))}" placeholder="—" aria-label="Step ${k + 1} weight"><span>lb</span></span>` : ""}
         <button type="button" class="icon-btn sm" data-w="step-del" data-k="${k}" aria-label="Remove step ${k + 1}"${w.steps.length < 2 ? " disabled" : ""}>${ICON.x}</button></li>`).join("")}</ol>
         <button type="button" class="link" data-w="step-add">${ICON.plus}Add a step</button></div>
+      ${type === "weights" ? `<div class="field"><span class="field-l">After the last step</span>${chips("loop", [["stay", "Stay there"], ["loop", "Add weight, start over"]], w.loop ? "loop" : "stay")}</div>` : ""}
       ${field("Next session", `<select id="se-step">${w.steps.map((st, k) => `<option value="${k}"${k === w.step ? " selected" : ""}>Step ${k + 1}: ${esc(stepText(st))}</option>`).join("")}</select>`)}`;
     const prog = `<div class="field"><span class="field-l">How it goes up</span>${chips("how", HOW_CHOICES[type], w.how)}</div>
+      ${steps}
       ${w.how === "none" ? "" : field("When", `<select id="se-when">${whenOpts.map(([k, l]) => `<option value="${k}"${k === whenKey ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
-      ${["load", "reps", "time"].includes(w.how) ? field("Each time, add", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>${unit()}</span></span>`, w.how === "load" ? `Leave blank to use your ${w.kind === "machine" ? "machine" : "free-weight"} default (${E.fmtNum(defaultBy())} lb, in Settings).` : "") : ""}
+      ${["load", "reps", "time"].includes(w.how) || loopOn() ? field(loopOn() ? "Weight added after the last step" : "Each time, add", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>${unit()}</span></span>`, w.how === "load" || loopOn() ? `Leave blank to use your ${w.kind === "machine" ? "machine" : "free-weight"} default (${E.fmtNum(defaultBy())} lb, in Settings).` : "") : ""}
       ${w.how === "none" || w.when === "manual" ? "" : `<label class="check"><input type="checkbox" id="se-hold"${w.hold ? " checked" : ""}><span>${timed ? "Hold if I cut a set short" : "Hold if I miss reps"}</span></label>`}
       ${w.when === "manual" && w.how !== "none" ? `<p class="muted small">In a session, set Next time to Go up when you're ready.</p>` : ""}`;
     sh.setTitle(w.name || ex.name);
     sh.body.innerHTML = `${field("Name", `<input id="se-name" maxlength="80" autocomplete="off" value="${esc(w.name)}">`, "Renames it everywhere it's used.")}
       <div class="field"><span class="field-l">Kind</span>${chips("kind", KIND_CHOICES, w.kind)}</div>
       <label class="check"><input type="checkbox" id="se-side"${w.side ? " checked" : ""}><span>Each side</span></label>
-      <h3 class="h3 sec">Sets and reps</h3>${amounts}${load}${steps}
+      ${w.how !== "steps" ? `<h3 class="h3 sec">Sets and reps</h3>` : type === "weights" ? `<h3 class="h3 sec">Weight</h3>` : ""}${amounts}${load}
       <h3 class="h3 sec">Progression</h3>${prog}
       ${field("Note", `<input id="se-note" maxlength="200" autocomplete="off" value="${esc(w.note)}" placeholder="Seat 4, wide grip…">`, "Shows on this exercise in your session.")}
       <button type="button" class="btn ghost block" data-w="swap">${ICON.swap}Swap for a different exercise</button>
       <p class="form-err" id="se-err" role="alert" hidden></p>`;
     wireChips(sh.body, "kind", (v) => { read(); w.kind = v; if (typeOf() !== "weights") w.load = null; draw(); });
     wireChips(sh.body, "how", (v) => { read(); w.how = v; draw(); });
+    wireChips(sh.body, "loop", (v) => { read(); w.loop = v === "loop"; draw(); });
     const whenSel = $("#se-when", sh.body);
     if (whenSel) whenSel.onchange = () => { read(); const [k, n] = whenSel.value.split("-"); w.when = k; w.every = Number(n) || 1; draw(); };
     $$("[data-w]", sh.body).forEach((b) => {
@@ -2374,7 +2401,7 @@ function editSlot(rt, slotId, onDone) {
       const g = (k) => { const e = $(`[data-st="${k}"]`, row); return e ? E.num(e.value) : undefined; };
       if (g("sets") !== undefined && g("sets") !== null) st.sets = E.clampSets(g("sets"));
       if (g("secs") !== undefined) st.secs = g("secs");
-      if (g("rmin") !== undefined) st.reps = E.normReps({ min: g("rmin"), max: g("rmax") });
+      if (g("reps") !== undefined) st.reps = E.normReps({ min: g("reps"), max: g("reps") });
       if (g("load") !== undefined) st.load = g("load");
     });
   }
@@ -2405,7 +2432,7 @@ function editSlot(rt, slotId, onDone) {
     // Its place in this routine
     const reps = timed ? null : E.normReps({ min: w.rmin, max: w.rmax === null ? w.rmin : w.rmax });
     const secs = timed ? Math.round(w.secs || 30) : null;
-    const prog = { how: w.how, when: w.how === "none" ? "weeks" : w.when, every: w.every, by: w.by, hold: w.hold, steps: w.how === "steps" ? E.normSteps(w.steps) : (slot.prog.steps || []) };
+    const prog = { how: w.how, when: w.how === "none" ? "weeks" : w.when, every: w.every, by: w.by, hold: w.hold, steps: w.how === "steps" ? E.normSteps(w.steps) : (slot.prog.steps || []), loop: w.how === "steps" && type === "weights" && !!w.loop };
     const np = E.normProg(prog, type);
     const t = E.snapshot(t0);
     const changed = oldType !== type || np.how !== p0.how
