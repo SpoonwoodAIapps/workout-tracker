@@ -24,6 +24,7 @@
   --red: #C8102E; --red-ink: #FFFFFF; --red-soft: #FBE8EA; --red-text: #B00E28;
   --p-workout: #C8102E; --p-freestyle: #E9B000; --p-bjj: #1E5AA8; --p-physio: #1F7A47; --p-stretch: #F4F4F1; --p-other: #5B636A;
   --ok: #1F7A47; --scrim: rgba(12, 15, 17, 0.5);
+  --warn: #F2B33D; --warn-ink: #241800; --warn-text: #9A5B00;
   --font: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --cond: "Barlow Condensed", "Barlow", system-ui, sans-serif;
   --r-slab: 18px; --r-card: 12px; --r-in: 8px;
@@ -37,6 +38,7 @@
     --red: #DA2440; --red-soft: #3A1A20; --red-text: #FF7F8F;
     --p-workout: #DA2440; --p-stretch: #E9EAE6; --p-other: #6B747B;
     --scrim: rgba(0, 0, 0, 0.62);
+    --warn: #E9A93A; --warn-ink: #1E1400; --warn-text: #F2B33D;
     color-scheme: dark;
   }
 }
@@ -286,16 +288,24 @@ html.in-session, html.in-session body { overflow: hidden; }
 .ex.is-skipped { background: transparent; border-style: dashed; padding-bottom: 12px; }
 .ex.is-skipped h3 { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
 .sets { display: grid; gap: 6px; }
-.set-h, .set { display: grid; grid-template-columns: 30px 1fr 52px; gap: 8px; align-items: center; }
-.sets.two .set-h, .sets.two .set { grid-template-columns: 30px 1fr 1fr 52px; }
+.set-h, .set { display: grid; grid-template-columns: 38px 1fr 52px; gap: 8px; align-items: center; }
+.sets.two .set-h, .sets.two .set { grid-template-columns: 38px 1fr 1fr 52px; }
 .set-h span { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; }
 .set-h span:first-child { text-align: left; }
-.set-n { font: 700 18px/1 var(--cond); color: var(--muted); }
+.set-n { width: 38px; height: 44px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--sunk); font: 700 19px/1 var(--cond); color: var(--muted); }
+.set-n:active { background: var(--line); }
 .set .num { min-height: 50px; padding: 4px 6px; text-align: center; font: 700 24px/1 var(--cond); font-variant-numeric: tabular-nums; border-radius: var(--r-in); }
 .set.is-done .num { background: var(--sunk); border-color: transparent; }
 .tick { width: 52px; height: 50px; border-radius: 10px; border: 2px solid var(--line-2); background: var(--surface); display: grid; place-items: center; color: var(--line-2); }
 .tick .i { width: 26px; height: 26px; stroke-width: 2.6; }
 .tick.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.tick.missed { background: var(--warn); border-color: var(--warn); color: var(--warn-ink); font: 700 21px/1 var(--cond); }
+.tick.skipped { background: transparent; border-style: dashed; color: var(--muted); }
+.set.is-missed .num[data-sf="reps"], .set.is-missed .num[data-sf="secs"] { color: var(--warn-text); }
+.set.is-skipped .num { opacity: 0.45; text-decoration: line-through; text-decoration-thickness: 2px; }
+.ex-skip-sets { margin: 0; font-size: 14px; color: var(--muted); padding: 6px 10px; border-left: 3px dashed var(--line-2); }
+.ses-tip { margin: -6px 0 0; color: var(--muted); font-size: 14px; }
+.ses-tip .i { display: inline-block; vertical-align: -3px; width: 16px; height: 16px; stroke-width: 2.6; color: var(--ok); }
 .ex-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .next-sel { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .next-sel select { width: auto; min-height: 40px; padding: 4px 34px 4px 10px; font-size: 16px; font-weight: 600; color: var(--ink); background-position: calc(100% - 19px) 17px, calc(100% - 13px) 17px; }
@@ -720,6 +730,32 @@ html.in-session, html.in-session body { overflow: hidden; }
     return true;
   }
   // Every planned set ticked and each one at least the bottom of the rep range (or the full time)
+  function setStatus(item, s) {
+    if (!s) return "open";
+    if (s.skip) return "skipped";
+    if (!s.done) return "open";
+    return setShort(item, s) ? "missed" : "done";
+  }
+  // How far a done set fell short of the target: "2" reps, "5s", or "" when it didn't
+  function setShort(item, s) {
+    const t = (item && item.target) || {};
+    const secs = num(t.secs), r = normReps(t.reps);
+    if (secs !== null) { const v = num(s.secs); return v !== null && v < secs ? `${fmtNum(secs - v)}s` : ""; }
+    if (r) { const v = num(s.reps); return v !== null && v < r.min ? String(r.min - v) : ""; }
+    return "";
+  }
+  // "Sets 2 and 3 skipped: Felt off. Something felt weird"
+  function skippedSetsText(item) {
+    const groups = new Map();
+    (item.sets || []).forEach((s, i) => { if (s && s.skip) { const k = `${s.why || ""}|${s.note || ""}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i + 1); } });
+    const out = [];
+    for (const [k, nums] of groups) {
+      const [why, note] = k.split("|");
+      const which = nums.length === 1 ? `Set ${nums[0]}` : `Sets ${nums.slice(0, -1).join(", ")} and ${nums[nums.length - 1]}`;
+      out.push(`${which} skipped${why ? `: ${why}` : ""}${note ? `${why ? ". " : ": "}${note}` : ""}`);
+    }
+    return out.join(". ");
+  }
   function itemComplete(item) {
     const t = item.target || {};
     const need = clampSets(t.sets || (item.sets || []).length);
@@ -835,7 +871,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     if (plateUp) hint = `Go up one plate from ${fmtNum(L.load)} lb and enter the new weight`;
     else if (change === "new") hint = borrowed ? `Last done in ${borrowed.title || "another workout"}` : exType === "weights" && t.load === null ? "First time: enter your weight" : "First time";
     else if (change === "set") hint = "Set by you";
-    else if (change === "held") hint = "Held: you missed reps last time";
+    else if (change === "held") hint = (P.item.sets || []).some((x) => x && x.skip) ? "Held: you skipped a set last time" : "Held: you missed reps last time";
     else if (change === "same") {
       if (P && P.item.next === "hold") hint = "Held by you";
       else if (finalStep) hint = "Last step";
@@ -906,6 +942,10 @@ html.in-session, html.in-session body { overflow: hidden; }
     return c;
   }
   function setsSummary(item) {
+    const base = setsDone(item), sk = (item.sets || []).filter((s) => s && s.skip).length;
+    return base && sk ? `${base}, ${sk} skipped` : base;
+  }
+  function setsDone(item) {
     const done = (item.sets || []).filter((s) => s && s.done);
     if (!done.length) return "";
     const side = item.side ? " each side" : "";
@@ -947,7 +987,8 @@ html.in-session, html.in-session body { overflow: hidden; }
     return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
   function toCSV(logs) {
-    const head = ["date", "type", "title", "minutes", "exercise", "status", "set", "weight_lb", "reps", "seconds", "set_done", "exercise_note", "skip_reason", "session_notes", "bjj_kind", "rounds", "for", "log_id"];
+    const head = ["date", "type", "title", "minutes", "exercise", "status", "set", "weight_lb", "reps", "seconds", "set_status", "set_note", "exercise_note", "skip_reason", "session_notes", "bjj_kind", "rounds", "for", "log_id"];
+    const setState = { done: "done", missed: "missed reps", skipped: "skipped", open: "not done" };
     const rows = [head.join(",")];
     for (const l of (logs || []).slice().sort(cmpLog)) {
       const base = [l.date, TYPE_LABEL[l.type] || l.type, l.title || "", l.minutes || ""];
@@ -956,9 +997,9 @@ html.in-session, html.in-session body { overflow: hidden; }
         for (const it of l.items) {
           const status = it.status === "skipped" ? "skipped" : performed(it) ? "done" : "not done";
           const sets = it.status === "skipped" || !(it.sets || []).length ? [null] : it.sets;
-          sets.forEach((s, i) => rows.push([...base, it.name || "", status, s ? i + 1 : "", s ? fmtNum(num(s.load)) : "", s ? fmtNum(num(s.reps)) : "", s ? fmtNum(num(s.secs)) : "", s ? (s.done ? "yes" : "no") : "", it.note || "", it.skipNote || "", ...tail].map(csvCell).join(",")));
+          sets.forEach((s, i) => rows.push([...base, it.name || "", status, s ? i + 1 : "", s ? fmtNum(num(s.load)) : "", s ? fmtNum(num(s.reps)) : "", s ? fmtNum(num(s.secs)) : "", s ? setState[setStatus(it, s)] : "", s && s.skip ? [s.why, s.note].filter(Boolean).join(". ") : "", it.note || "", it.skipNote || "", ...tail].map(csvCell).join(",")));
         }
-      } else rows.push([...base, "", "", "", "", "", "", "", "", "", ...tail].map(csvCell).join(","));
+      } else rows.push([...base, "", "", "", "", "", "", "", "", "", "", ...tail].map(csvCell).join(","));
     }
     return rows.join("\r\n") + "\r\n";
   }
@@ -1037,7 +1078,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     num, r2, eqNum, fmtNum, fmtSecs, fmtMinutes, plural, normReps, clampSets, fmtReps, prescription,
     defaultHow, normSteps, normProg, whenLabel, plateMode, increment, progLabel,
     cmpLog, performed, historyFor, exerciseHistory, latestAnySlot, itemLevel, sameLevel, itemComplete, topOfRange,
-    nextTarget, stepDelta, snapshot, splitState, countByType, setsSummary, progressSummary, toCSV, validLog, uid,
+    nextTarget, stepDelta, snapshot, splitState, countByType, setStatus, setShort, skippedSetsText, setsSummary, progressSummary, toCSV, validLog, uid,
     clone, newSlot, seedState, findExercise, applyTemplate
   };
   if (typeof module !== "undefined" && module.exports) module.exports = Engine;
@@ -1646,6 +1687,7 @@ function renderSession() {
     </header>
     <div class="ses-body">
       <p class="ses-count" id="ses-count">${esc(countText(s))}</p>
+      ${s.type !== "stretch" ? `<p class="ses-tip">Tap ${ICON.check} when a set's done. Tap the set number for missed reps or to skip it.</p>` : ""}
       <div class="ses-list">${s.items.map((it, i) => cardHtml(it, i, s)).join("")}</div>
       <button class="btn ghost block" data-sa="add">${ICON.plus}Add ${s.type === "stretch" ? "a stretch" : "an exercise"}</button>
       ${field("Notes", `<textarea data-sf="notes" rows="3" maxlength="2000" placeholder="How it went">${esc(s.notes || "")}</textarea>`)}
@@ -1696,6 +1738,7 @@ function cardHtml(it, i, s) {
       <div class="set-h"><span>Set</span>${cols}<span></span></div>
       ${it.sets.map((x, si) => setRow(it, x, si)).join("")}
     </div>
+    ${it.sets.some((x) => x.skip) ? `<p class="ex-skip-sets">${esc(E.skippedSetsText(it))}</p>` : ""}
     <div class="ex-foot"><button class="link" data-sa="add-set">${ICON.plus}Add set</button>${nextSel}</div>
     ${meta.length ? `<p class="ex-meta">${meta.map(esc).join("<br>")}</p>` : ""}
     ${it.note ? `<p class="ex-note">${esc(it.note)}</p>` : ""}
@@ -1705,7 +1748,21 @@ function setRow(it, x, si) {
   const ph = it.target && it.target.plateUp ? ' placeholder="New"' : "";
   const f = (k, label, mode) => `<input class="num" data-sf="${k}" data-s="${si}" inputmode="${mode}" autocomplete="off" enterkeyhint="done" value="${x[k] === null || x[k] === undefined ? "" : esc(E.fmtNum(x[k]))}"${k === "load" ? ph : ""} aria-label="Set ${si + 1} ${label}">`;
   const cells = it.exType === "weights" ? f("load", "weight in pounds", "decimal") + f("reps", "reps", "numeric") : it.exType === "timed" ? f("secs", "seconds", "numeric") : f("reps", "reps", "numeric");
-  return `<div class="set${x.done ? " is-done" : ""}" data-s="${si}"><span class="set-n">${si + 1}</span>${cells}<button class="tick${x.done ? " on" : ""}" data-sa="tick" data-s="${si}" aria-pressed="${x.done}" aria-label="Set ${si + 1} done">${ICON.check}</button></div>`;
+  return `<div class="set is-${E.setStatus(it, x)}" data-s="${si}"><button class="set-n" data-sa="set-menu" data-s="${si}" aria-label="Set ${si + 1}: missed reps or skip">${si + 1}</button>${cells}${tickHtml(it, x, si)}</div>`;
+}
+function tickHtml(it, x, si) {
+  const st = E.setStatus(it, x);
+  if (st === "skipped") return `<button class="tick skipped" data-sa="tick" data-s="${si}" aria-pressed="false" aria-label="Set ${si + 1} skipped. Tap if you did it.">${ICON.minus}</button>`;
+  if (st === "missed") { const sh = E.setShort(it, x); return `<button class="tick missed" data-sa="tick" data-s="${si}" aria-pressed="true" aria-label="Set ${si + 1} done, ${esc(sh)}${/s$/.test(sh) ? "" : " reps"} short">−${esc(sh)}</button>`; }
+  return `<button class="tick${st === "done" ? " on" : ""}" data-sa="tick" data-s="${si}" aria-pressed="${st === "done"}" aria-label="Set ${si + 1} done">${ICON.check}</button>`;
+}
+// Update one set's look while typing, without touching the inputs
+function paintSet(i, si) {
+  const s = cur(), it = s && s.items[i], x = it && it.sets[si];
+  const row = x && $(`#session [data-i="${i}"] .set[data-s="${si}"]`);
+  if (!row) return;
+  row.className = `set is-${E.setStatus(it, x)}`;
+  const t = $(".tick", row); if (t) t.outerHTML = tickHtml(it, x, si);
 }
 
 // Something in the session changed: redraw that card, keep focus, save.
@@ -1744,8 +1801,9 @@ ses.addEventListener("click", (e) => {
   if (a === "discard") return discardSession();
   if (a === "add") return addToSession();
   if (!it) return;
-  if (a === "tick") { const x = it.sets[Number(b.dataset.s)]; if (x) { x.done = !x.done; touched(i); } }
-  else if (a === "tick-all") { const all = it.sets.length > 0 && it.sets.every((x) => x.done); if (!it.sets.length) it.sets.push({ load: null, reps: null, secs: it.target && it.target.secs, done: false }); it.sets.forEach((x) => { x.done = !all; }); touched(i); }
+  if (a === "tick") { const x = it.sets[Number(b.dataset.s)]; if (x) { if (x.skip) { clearSkip(x); x.done = true; } else x.done = !x.done; touched(i); } }
+  else if (a === "set-menu") setMenu(i, Number(b.dataset.s));
+  else if (a === "tick-all") { const all = it.sets.length > 0 && it.sets.every((x) => x.done); if (!it.sets.length) it.sets.push({ load: null, reps: null, secs: it.target && it.target.secs, done: false }); it.sets.forEach((x) => { clearSkip(x); x.done = !all; }); touched(i); }
   else if (a === "add-set") { const last = it.sets[it.sets.length - 1] || {}; it.sets.push({ load: last.load === undefined ? null : last.load, reps: last.reps === undefined ? null : last.reps, secs: last.secs === undefined ? null : last.secs, done: false }); touched(i); const r = $$(`#session [data-i="${i}"] .set`); const nIn = r.length && $("input", r[r.length - 1]); if (nIn) nIn.focus(); }
   else if (a === "unskip") { it.status = "open"; it.skipReason = ""; it.skipNote = ""; touched(i); }
   else if (a === "menu") itemMenu(i);
@@ -1756,7 +1814,7 @@ ses.addEventListener("input", (e) => {
   if (k === "notes") { s.notes = inp.value; touched(); return; }
   if (k === "load" || k === "reps" || k === "secs") {
     const card = inp.closest("[data-i]"), it = s.items[Number(card.dataset.i)], x = it && it.sets[Number(inp.dataset.s)];
-    if (x) { x[k] = cleanNum(k, inp.value); touched(Number(card.dataset.i), false); }
+    if (x) { x[k] = cleanNum(k, inp.value); touched(Number(card.dataset.i), false); paintSet(Number(card.dataset.i), Number(inp.dataset.s)); }
   }
 });
 ses.addEventListener("change", (e) => {
@@ -1897,13 +1955,15 @@ function suggestMinutes(s) {
 function finishSheet() {
   const s = cur();
   if (!E.isDate(s.date) || s.date > S.today) return toast("Pick a day up to today.");
-  const done = s.items.filter(E.performed), skipped = s.items.filter((it) => it.status === "skipped"), open = s.items.filter((it) => it.status !== "skipped" && !E.performed(it));
+  const done = s.items.filter(E.performed), skipped = s.items.filter((it) => it.status === "skipped"), open = s.items.filter((it) => it.status !== "skipped" && !E.performed(it) && !allSkipped(it));
+  const shortOf = done.filter((it) => it.sets.some((x) => ["missed", "skipped"].includes(E.setStatus(it, x))));
   const editing = !!S.edit;
   const sh = openSheet({ title: editing ? `Save ${s.title}` : `Finish ${s.title}` });
   const mins = editing ? (s.minutes || "") : suggestMinutes(s);
   sh.body.innerHTML = `<ul class="fin">
       <li><strong>${done.length}</strong> of ${esc(kindNoun(s.type, s.items.length))} done</li>
       ${skipped.length ? `<li>Skipped: ${esc(listJoin(skipped.map((x) => x.name)))}</li>` : ""}
+      ${shortOf.length ? `<li>Missed reps or skipped sets: ${esc(listJoin(shortOf.map((x) => x.name)))}</li>` : ""}
       ${open.length ? `<li class="warn">Nothing ticked for ${esc(listJoin(open.map((x) => x.name)))}. ${open.length === 1 ? "It's" : "They're"} saved as not done.</li>` : ""}
     </ul>
     ${field("How long", `<span class="unit-in"><input id="fn-min" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(mins)}" placeholder="Optional"><span>min</span></span>`)}
@@ -1923,8 +1983,8 @@ async function saveSession(minutes) {
     const perf = E.performed(it);
     const o = {
       slotId: it.slotId, exId: it.exId, name: it.name, exType: it.exType, equip: it.equip, side: !!it.side,
-      status: perf ? "done" : "skipped", skipReason: perf ? "" : it.status === "skipped" ? it.skipReason || "" : "Not done", skipNote: perf ? "" : it.skipNote || "",
-      note: it.note || "", target: it.target, sets: it.sets.map((x) => ({ load: x.load === undefined ? null : x.load, reps: x.reps === undefined ? null : x.reps, secs: x.secs === undefined ? null : x.secs, done: !!x.done })), next: it.next || null
+      status: perf ? "done" : "skipped", skipReason: perf ? "" : it.status === "skipped" ? it.skipReason || "" : allSkipped(it) ? (it.sets.find((x) => x.why) || {}).why || "Skipped" : "Not done", skipNote: perf ? "" : it.status === "skipped" ? it.skipNote || "" : allSkipped(it) ? (it.sets.find((x) => x.note) || {}).note || "" : "",
+      note: it.note || "", target: it.target, sets: it.sets.map((x) => Object.assign({ load: x.load === undefined ? null : x.load, reps: x.reps === undefined ? null : x.reps, secs: x.secs === undefined ? null : x.secs, done: !!x.done && !x.skip }, x.skip ? { skip: true, why: x.why || "", note: x.note || "" } : {})), next: it.next || null
     };
     if (it.swappedFrom) o.swappedFrom = it.swappedFrom;
     if (it.added) o.added = true;
@@ -1939,6 +1999,52 @@ async function saveSession(minutes) {
   closeSession();
   const nx = log.type === "workout" ? nextRoutine() : null;
   toast(`${log.title} saved${nx ? `. Next up: ${nx.name}` : ""}`, { label: "Undo", run: async () => { try { await removeLog(log.id); } catch (e) { return saveErr(e); } S.draft = draft; saveDraftNow(); render(); } });
+}
+
+function clearSkip(x) { delete x.skip; delete x.why; delete x.note; }
+const allSkipped = (it) => it.sets.length > 0 && it.sets.every((x) => x.skip);
+function setMenu(i, si) {
+  const s = cur(), it = s.items[i], x = it.sets[si];
+  if (!x) return;
+  const t = it.target || {}, timed = it.exType === "timed";
+  const r = E.normReps(t.reps), need = timed ? E.num(t.secs) : r ? r.min : null;
+  const did = timed ? (x.secs !== null && x.secs !== undefined ? E.fmtSecs(x.secs) : "") : `${it.exType === "weights" && x.load !== null && x.load !== undefined ? `${E.fmtNum(x.load)} lb × ` : ""}${x.reps !== null && x.reps !== undefined ? `${x.reps} reps` : ""}`;
+  const sh = openSheet({ title: `${it.name}, set ${si + 1}` });
+  let missed = "";
+  if (!timed && need && need > 1) {
+    missed = need <= 16
+      ? `<div class="field"><span class="field-l">Missed reps: how many did you get?</span><div class="chips">${Array.from({ length: need - 1 }, (_, k) => `<button type="button" class="chip" data-missed="${k + 1}">${k + 1}</button>`).join("")}</div></div>`
+      : `<div class="field"><span class="field-l">Missed reps: how many did you get?</span><span class="unit-in"><input id="sm-got" inputmode="numeric" pattern="[0-9]*"><span>of ${need}</span><button type="button" class="btn ghost sm" data-k="got">Save</button></span></div>`;
+  } else if (timed && need) {
+    missed = `<div class="field"><span class="field-l">Cut short: how long did you hold?</span><span class="unit-in"><input id="sm-got" inputmode="numeric" pattern="[0-9]*" placeholder="${esc(need)}"><span>s</span><button type="button" class="btn ghost sm" data-k="got">Save</button></span></div>`;
+  }
+  const later = it.sets.slice(si + 1).some((y) => !y.done);
+  sh.body.innerHTML = `<div class="choices"><button class="choice" data-k="done">${ICON.check}<span class="choice-main"><strong>Done</strong><span>${esc(did || "As planned")}</span></span></button></div>
+    ${missed}
+    <div class="field"><span class="field-l">Skip it</span>${chips("why", SKIP_REASONS, x.skip ? x.why || "" : "")}</div>
+    ${field("Note", `<textarea id="sm-note" rows="2" maxlength="300" placeholder="Optional, like what felt off">${esc(x.skip ? x.note || "" : "")}</textarea>`)}
+    <div class="row-btns"><button type="button" class="btn ghost" data-k="skip">Skip this set</button>${later ? `<button type="button" class="btn ghost" data-k="skip-rest">Skip this and the rest</button>` : ""}</div>
+    ${x.done || x.skip || it.sets.length > 1 ? `<div class="row-btns">${x.done || x.skip ? `<button type="button" class="btn ghost sm" data-k="open">Not done yet</button>` : ""}${it.sets.length > 1 ? `<button type="button" class="btn ghost sm danger-text" data-k="remove">${ICON.trash}Remove this set</button>` : ""}</div>` : ""}`;
+  const pick = () => {}; pick.toggle = true;
+  wireChips(sh.body, "why", pick);
+  const finish = () => { sh.close(true); touched(i); };
+  const skipOne = (y) => { y.done = false; y.skip = true; y.why = chipValue(sh.body, "why"); y.note = $("#sm-note", sh.body).value.trim(); };
+  $$("[data-missed]", sh.body).forEach((b) => { b.onclick = () => { clearSkip(x); x.reps = Number(b.dataset.missed); x.done = true; finish(); }; });
+  $$("[data-k]", sh.body).forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.k;
+      if (k === "done") { clearSkip(x); x.done = true; }
+      else if (k === "got") {
+        const v = E.num($("#sm-got", sh.body).value);
+        if (v === null || v < 0) return $("#sm-got", sh.body).focus();
+        clearSkip(x); x[timed ? "secs" : "reps"] = Math.round(v); x.done = true;
+      } else if (k === "skip") skipOne(x);
+      else if (k === "skip-rest") { skipOne(x); it.sets.slice(si + 1).forEach((y) => { if (!y.done) skipOne(y); }); }
+      else if (k === "open") { clearSkip(x); x.done = false; }
+      else if (k === "remove") it.sets.splice(si, 1);
+      finish();
+    };
+  });
 }
 
 /* Calendar: any month or week, each day's activities, and every logged session in detail. */
@@ -2039,6 +2145,7 @@ function openLogDetail(id, onChange) {
       const sk = it.status === "skipped";
       const what = sk ? `Skipped${it.skipReason ? `: ${it.skipReason}` : ""}${it.skipNote ? `. ${it.skipNote}` : ""}` : E.setsSummary(it) || "Done";
       const extra = [];
+      if (!sk && (it.sets || []).some((x) => x && x.skip)) extra.push(E.skippedSetsText(it));
       if (it.swappedFrom) extra.push(`Swapped in for ${(exById(it.swappedFrom) || {}).name || "another exercise"}`);
       if (it.added) extra.push("Added for this session");
       if (it.next === "up") extra.push("Go up next time");
@@ -2134,7 +2241,7 @@ function openExerciseDetail(id) {
   h += `<h3 class="h3 sec">History</h3><ol class="dlist">${entries.slice().reverse().map((e) => {
     const sk = !E.performed(e.item);
     const what = sk ? `Skipped${e.item.skipReason ? `: ${e.item.skipReason}` : ""}${e.item.skipNote ? `. ${e.item.skipNote}` : ""}` : E.setsSummary(e.item);
-    return `<li class="${sk ? "is-skipped" : ""}"><span class="dl-name">${esc(E.fmtDay(e.log.date))}<span class="muted"> ${esc(e.log.title || "")}</span>${!sk && e.item.target && e.item.target.change === "up" && e.item.target.delta ? ` <span class="tag up">${esc(e.item.target.delta)}</span>` : ""}</span><span class="dl-what">${esc(what)}</span>${e.item.note ? `<span class="dl-note">${esc(e.item.note)}</span>` : ""}</li>`;
+    return `<li class="${sk ? "is-skipped" : ""}"><span class="dl-name">${esc(E.fmtDay(e.log.date))}<span class="muted"> ${esc(e.log.title || "")}</span>${!sk && e.item.target && e.item.target.change === "up" && e.item.target.delta ? ` <span class="tag up">${esc(e.item.target.delta)}</span>` : ""}</span><span class="dl-what">${esc(what)}</span>${!sk && (e.item.sets || []).some((x) => x && x.skip) ? `<span class="dl-extra">${esc(E.skippedSetsText(e.item))}</span>` : ""}${e.item.note ? `<span class="dl-note">${esc(e.item.note)}</span>` : ""}</li>`;
   }).join("")}</ol>`;
   sh.body.innerHTML = h;
 }
