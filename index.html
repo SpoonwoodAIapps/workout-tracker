@@ -153,6 +153,9 @@ html.in-session .tabbar { display: none; }
 .tag.held { background: var(--sunk); color: var(--muted); }
 .hero .tag.held { background: var(--slab-line); color: var(--slab-ink); }
 .tag.next { background: var(--red-soft); color: var(--red-text); }
+.tag.soft { background: var(--sunk); color: var(--muted); }
+.free-btns { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.stepper .muted { margin-left: 6px; }
 
 /* ---------- Quick log & week ---------- */
 .quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -318,12 +321,6 @@ html.in-session, html.in-session body { overflow: hidden; }
 .fin .warn { border-color: var(--red-text); }
 
 /* ---------- Plan ---------- */
-.splitlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.splitlist li { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); }
-.splitlist li.is-next { border-color: var(--red); box-shadow: inset 3px 0 0 var(--red); }
-.sl-n { font: 700 22px/1 var(--cond); color: var(--muted); width: 22px; }
-.sl-name { flex: 1; min-width: 0; font-weight: 700; }
-.sl-btns { display: flex; }
 .slotlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .slot { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); }
 .slot-main { flex: 1; min-width: 0; display: grid; gap: 1px; padding: 10px 6px 10px 14px; border: 0; background: none; text-align: left; border-radius: var(--r-card) 0 0 var(--r-card); }
@@ -332,6 +329,30 @@ html.in-session, html.in-session body { overflow: hidden; }
 .slot-main .slot-prog { color: var(--red-text); font-weight: 600; font-size: 13px; }
 .slot-move { display: grid; align-content: center; padding-right: 2px; }
 .slot-move .icon-btn.sm { height: 34px; }
+/* Workouts: the active split (in order) and the inactive ones. Drag by the dots. */
+.rot-zone { display: grid; gap: 8px; }
+.rotlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rotrow { display: flex; align-items: center; min-height: 62px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); }
+.rotlist[data-zone="inactive"] .rotrow { background: transparent; }
+.rotrow.is-next { border-color: var(--red); box-shadow: inset 3px 0 0 var(--red); }
+.grip { align-self: stretch; width: 42px; flex: none; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--muted); border-radius: var(--r-card) 0 0 var(--r-card); touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.grip .i { width: 22px; height: 22px; }
+.rot-n { flex: none; width: 16px; margin-left: -4px; font: 700 21px/1 var(--cond); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.rotlist[data-zone="inactive"] .rot-n { display: none; }
+.rot-main { flex: 1; min-width: 0; align-self: stretch; display: grid; align-content: center; gap: 1px; padding: 8px 4px 8px 10px; border: 0; background: none; text-align: left; }
+.rot-main strong { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rot-main > span { color: var(--muted); font-size: 14px; }
+.rotrow > .icon-btn { color: var(--muted); }
+.rot-empty { display: none; padding: 14px 16px; border: 1px dashed var(--line-2); border-radius: var(--r-card); color: var(--muted); font-size: 14px; }
+.rotlist.is-empty > .rot-empty { display: block; }
+.rot-ph { border: 2px dashed var(--line-2); border-radius: var(--r-card); }
+.rotlist .rotrow.lifted { position: fixed; z-index: 35; margin: 0; background: var(--surface); box-shadow: 0 14px 32px rgba(0, 0, 0, 0.24); transform: scale(1.02); }
+.rotlist .rotrow.lifted .rot-n { display: block; }
+.rotlist .rotrow.lifted.to-inactive .rot-n { display: none; }
+.rotrow.lifted .grip { cursor: grabbing; }
+html.dragging, html.dragging * { -webkit-user-select: none; user-select: none; cursor: grabbing; }
+.lrow.wrap .lr-main strong, .lrow.wrap .lr-main span { white-space: normal; }
+.model-prev { margin: 0; padding: 8px 12px; background: var(--sunk); border-radius: 8px; font-size: 14px; font-variant-numeric: tabular-nums; }
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .steprow { display: flex; align-items: center; gap: 4px; padding: 6px 2px 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .steprow > input { width: 44px; min-height: 42px; padding: 4px; text-align: center; font-size: 16px; }
@@ -566,8 +587,12 @@ html.in-session, html.in-session body { overflow: hidden; }
   const TYPE_LABEL = { workout: "Workout", freestyle: "Freestyle", bjj: "BJJ", physio: "Physio", stretch: "Stretch", other: "Other" };
   const TYPE_LETTER = { workout: "W", freestyle: "F", bjj: "B", physio: "P", stretch: "S", other: "O" };
   const ROUTINE_KINDS = ["workout", "physio", "stretch"];
-  const EX_TYPES = ["weights", "bodyweight", "timed"];
-  const HOWS = ["load", "reps", "time", "steps", "none"];
+  const EX_TYPES = ["weights", "bodyweight", "timed", "check"];   // check: no sets or reps, just tick it off
+  const HOWS = ["load", "reps", "time", "steps", "free", "none"];   // free: you set the next target yourself
+  // Workouts belong to a family; an exercise's progression is shared by the workouts of one family
+  const FAMILIES = ["strength", "hypertrophy", "mixed"];
+  const FAMILY_LABEL = { strength: "Strength", hypertrophy: "Hypertrophy", mixed: "Mixed" };
+  const DEFAULT_FAMILY = "hypertrophy";
   const WHENS = ["session", "weeks", "sessions", "range", "manual"];
   const WHEN_OPTIONS = [
     ["session-1", "Every workout"], ["weeks-1", "Every week"], ["weeks-2", "Every 2 weeks"], ["weeks-3", "Every 3 weeks"], ["weeks-4", "Every 4 weeks"],
@@ -631,9 +656,9 @@ html.in-session, html.in-session body { overflow: hidden; }
   function fmtReps(r) { r = normReps(r); return r ? (r.min === r.max ? String(r.min) : `${r.min}–${r.max}`) : ""; }
   // "3 × 8–12", "4 × 20s each side"
   function prescription(t, side) {
-    if (!t) return "";
-    const what = t.secs != null ? fmtSecs(t.secs) : t.reps ? fmtReps(t.reps) : "";
-    return `${clampSets(t.sets)} × ${what}${side ? " each side" : ""}`.trim();
+    if (!t || (t.secs == null && !t.reps)) return "";
+    const what = t.secs != null ? fmtSecs(t.secs) : fmtReps(t.reps);
+    return `${clampSets(t.sets)} × ${what}${side ? " each side" : ""}`;
   }
 
   // ---------- Progression settings ----------
@@ -646,6 +671,7 @@ html.in-session, html.in-session body { overflow: hidden; }
   function normProg(p, exType) {
     const q = p || {};
     let how = HOWS.includes(q.how) ? q.how : defaultHow(exType);
+    if (exType === "check") how = "none";
     if (how === "load" && exType !== "weights") how = defaultHow(exType);
     if (how === "reps" && exType === "timed") how = "time";
     if (how === "time" && exType !== "timed") how = defaultHow(exType);
@@ -657,7 +683,7 @@ html.in-session, html.in-session body { overflow: hidden; }
     const by = num(q.by);
     const loop = how === "steps" && exType === "weights" && !!q.loop;
     const plate = q.plate === true ? true : q.plate === false ? false : null;
-    return { how, when, every, by: by !== null && by > 0 ? by : null, hold: q.hold !== false, steps, loop, plate };
+    return { how, when, every, by: by !== null && by > 0 ? by : null, hold: q.hold !== false, steps, loop, plate, model: typeof q.model === "string" ? q.model : null };
   }
   function whenLabel(prog) {
     const key = `${prog.when}-${prog.when === "weeks" || prog.when === "sessions" ? prog.every : 1}`;
@@ -667,7 +693,7 @@ html.in-session, html.in-session body { overflow: hidden; }
   }
   // "Next plate": the app says when to go up and you enter the new weight (machine plates differ machine to machine)
   function plateMode(prog, ex, settings) {
-    if (!(prog.how === "load" || prog.loop) || !ex || ex.type !== "weights") return false;
+    if (!(prog.how === "load" || prog.loop || prog.how === "free") || !ex || ex.type !== "weights") return false;
     if (prog.plate === true) return true;
     if (prog.plate === false || prog.by) return false;
     const st = settings || DEFAULT_SETTINGS;
@@ -677,7 +703,7 @@ html.in-session, html.in-session body { overflow: hidden; }
   function increment(prog, ex, settings) {
     if (prog.by) return prog.by;
     const st = settings || DEFAULT_SETTINGS;
-    if (prog.how === "load" || prog.loop) return num(ex && ex.equip === "machine" ? st.inc && st.inc.machine : st.inc && st.inc.free) || (ex && ex.equip === "machine" ? 10 : 5);
+    if (prog.how === "load" || prog.loop || (prog.how === "free" && ex && ex.type === "weights")) return num(ex && ex.equip === "machine" ? st.inc && st.inc.machine : st.inc && st.inc.free) || (ex && ex.equip === "machine" ? 10 : 5);
     if (prog.how === "reps") return 1;
     if (prog.how === "time") return 5;
     return 0;
@@ -685,7 +711,9 @@ html.in-session, html.in-session body { overflow: hidden; }
   // One line in plain words: "+5 lb every week", "+1 rep every workout", "Custom steps, only when I say"
   function progLabel(p, ex, settings) {
     const prog = normProg(p, ex && ex.type);
+    if (ex && ex.type === "check") return "Tick it off";
     if (prog.how === "none") return "Doesn't progress";
+    if (prog.how === "free") return "Freestyle: you set it as you go";
     const inc = increment(prog, ex, settings), plate = plateMode(prog, ex, settings);
     const what = prog.how === "load" ? (plate ? "Next plate" : `+${fmtNum(inc)} lb`) : prog.how === "reps" ? `+${inc} rep${inc === 1 ? "" : "s"}` : prog.how === "time" ? `+${inc}s` : prog.loop ? `Next step, then ${plate ? "next plate" : `+${fmtNum(inc)} lb`} and repeat` : "Next step";
     const when = whenLabel(prog);
@@ -695,11 +723,17 @@ html.in-session, html.in-session body { overflow: hidden; }
   // ---------- History ----------
   function cmpLog(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.created_at || "").localeCompare(String(b.created_at || "")); }
   function performed(item) { return !!item && item.status !== "skipped" && Array.isArray(item.sets) && item.sets.some((s) => s && s.done); }
-  function historyFor(logs, slotId, exId, excludeLogId) {
+  // Which family a logged session counts toward (sessions saved before families were Hypertrophy)
+  function logFamily(log) { return (log && log.family) || (log && (log.type === "physio" || log.type === "stretch") ? log.type : DEFAULT_FAMILY); }
+  function familyOf(routine) { return !routine ? DEFAULT_FAMILY : routine.kind === "physio" || routine.kind === "stretch" ? routine.kind : FAMILIES.includes(routine.family) ? routine.family : DEFAULT_FAMILY; }
+  const setupKey = (exId, fam) => `${exId}|${fam}`;
+  // Every time this exercise was done in workouts of this family, oldest first
+  function historyFor(logs, exId, family, excludeLogId) {
+    const fam = family || DEFAULT_FAMILY;
     const out = [];
     for (const log of logs || []) {
-      if (!log || log.id === excludeLogId || !Array.isArray(log.items)) continue;
-      for (const item of log.items) if (item && item.slotId === slotId && item.exId === exId && performed(item)) out.push({ log, item });
+      if (!log || log.id === excludeLogId || !Array.isArray(log.items) || logFamily(log) !== fam) continue;
+      for (const item of log.items) if (item && item.exId === exId && performed(item)) out.push({ log, item });
     }
     return out.sort((a, b) => cmpLog(a.log, b.log));
   }
@@ -711,8 +745,8 @@ html.in-session, html.in-session body { overflow: hidden; }
     }
     return out.sort((a, b) => cmpLog(a.log, b.log));
   }
-  function latestAnySlot(logs, exId, excludeLogId) {
-    const h = exerciseHistory(logs, exId).filter((x) => x.log.id !== excludeLogId && performed(x.item));
+  function latestAnySlot(logs, exId, excludeLogId, family) {
+    const h = exerciseHistory(logs, exId).filter((x) => x.log.id !== excludeLogId && performed(x.item) && (!family || logFamily(x.log) !== family));
     return h.length ? h[h.length - 1] : null;
   }
   // What the exercise was actually done at: heaviest weight used on a ticked set, the target reps/time/step
@@ -787,6 +821,9 @@ html.in-session, html.in-session body { overflow: hidden; }
     return down || !parts.length ? `Step ${idx + 1}` : parts.join(", ");
   }
 
+  // What went up from one plan to the next ("+10s", "+5 lb, +1 set"), or "" when nothing did
+  function planDelta(a, b, exType) { const d = stepDelta(a, b, exType, -1); return d === "Step 0" ? "" : d; }
+
   /* The target for an exercise's next session, worked out from what was done last time and its progression rule.
      - The level is what was actually used last time (heaviest ticked weight), unless the exercise was set by hand since.
      - Hold if reps were missed (when "hold" is on). A "progress" or "hold" pick for next time overrides the rule.
@@ -796,18 +833,24 @@ html.in-session, html.in-session body { overflow: hidden; }
     const exType = ex && EX_TYPES.includes(ex.type) ? ex.type : "weights";
     const prog = normProg(slot.prog, exType);
     const how = prog.how, steps = prog.steps;
-    const hist = historyFor(logs, slot.id, ex.id, o.excludeLogId);
+    const fam = o.family || DEFAULT_FAMILY;
+    const hist = historyFor(logs, ex.id, fam, o.excludeLogId);
     const at = slot.at || "";
     const since = hist.filter((h) => String(h.log.created_at || "") > at);
     const P = since.length ? since[since.length - 1] : null;
     const last = hist.length ? hist[hist.length - 1] : null;
+    const lastInfo = last ? { date: last.log.date, title: last.log.title, item: last.item } : null;
     const clampStep = (n) => Math.max(0, Math.min(Math.max(0, steps.length - 1), Math.round(num(n) || 0)));
+    if (exType === "check") {
+      return { how: "none", when: prog.when, every: 1, sets: 1, reps: null, secs: null, load: null, plateUp: false, plateMode: false, step: 0, stepCount: 0, change: last ? "same" : "new", delta: null, hint: "", goal: [{ load: null, reps: null, secs: null }], complete: null, held: false, finalStep: false, last: lastInfo };
+    }
+    if (how === "free") return freeTarget(slot, ex, exType, prog, P, last, lastInfo, logs, settings, o);
 
     let L, due = false, held = false, runStart = null, runCount = 0, complete = null, borrowed = null;
     if (!P) {
       L = { load: num(slot.load), reps: normReps(slot.reps), secs: num(slot.secs), step: clampStep(slot.step) };
       if (L.load === null && exType === "weights" && o.fallback) {
-        const any = latestAnySlot(logs, ex.id, o.excludeLogId);
+        const any = latestAnySlot(logs, ex.id, o.excludeLogId, fam);
         if (any) { L.load = itemLevel(any.item).load; borrowed = { date: any.log.date, title: any.log.title }; }
       }
     } else {
@@ -900,8 +943,44 @@ html.in-session, html.in-session body { overflow: hidden; }
     return {
       how, when: prog.when, every: prog.every, sets: t.sets, reps: t.reps, secs: t.secs, load: t.load, plateUp, plateMode: plate,
       step: how === "steps" ? N.step : 0, stepCount: steps.length, change, delta, hint, goal, complete, held, finalStep,
-      last: last ? { date: last.log.date, title: last.log.title, item: last.item } : null
+      last: lastInfo
     };
+  }
+  /* Freestyle: nothing goes up on its own. Next time repeats last time, unless you set the next one in that session
+     (sets, reps or seconds, weight or next plate). */
+  function freeTarget(setup, ex, exType, prog, P, last, lastInfo, logs, settings, o) {
+    const base = { sets: clampSets(setup.sets), reps: exType === "timed" ? null : normReps(setup.reps), secs: exType === "timed" ? num(setup.secs) : null, load: exType === "weights" ? num(setup.load) : null };
+    const lastT = P ? P.item.target || {} : null;
+    const Lload = P ? itemLevel(P.item).load : base.load;
+    const np = P && P.item.nextPlan ? P.item.nextPlan : null;
+    let t, change, delta = null, hint = "", plateUp = false, borrowed = null;
+    if (np) {
+      const r = np.reps === null || np.reps === undefined ? null : normReps(typeof np.reps === "object" ? np.reps : { min: np.reps, max: np.reps });
+      t = {
+        sets: clampSets(np.sets || lastT.sets || base.sets),
+        reps: exType === "timed" ? null : r || normReps(lastT.reps) || base.reps,
+        secs: exType === "timed" ? (num(np.secs) !== null ? num(np.secs) : num(lastT.secs)) : null,
+        load: exType === "weights" ? (np.plate ? Lload : num(np.load) !== null ? num(np.load) : Lload) : null
+      };
+      plateUp = !!np.plate && exType === "weights" && Lload !== null;
+      const d = plateUp ? "Next plate" : planDelta({ sets: clampSets(lastT.sets), reps: normReps(lastT.reps), secs: num(lastT.secs), load: Lload }, t, exType);
+      change = d ? "up" : "set"; delta = d || null;
+      hint = plateUp ? `Go up one plate from ${fmtNum(Lload)} lb and enter the new weight` : "Set by you last time";
+    } else if (P) {
+      t = { sets: clampSets(lastT.sets || base.sets), reps: exType === "timed" ? null : normReps(lastT.reps) || base.reps, secs: exType === "timed" ? (num(lastT.secs) !== null ? num(lastT.secs) : base.secs) : null, load: exType === "weights" ? Lload : null };
+      change = "same"; hint = "Same as last time. Set the next one with Next time.";
+    } else {
+      t = Object.assign({}, base);
+      if (t.load === null && exType === "weights" && o.fallback) {
+        const any = latestAnySlot(logs, ex.id, o.excludeLogId, o.family || DEFAULT_FAMILY);
+        if (any) { t.load = itemLevel(any.item).load; borrowed = any.log.title; }
+      }
+      change = last ? "set" : "new";
+      hint = change === "set" ? "Set by you" : borrowed ? `Last done in ${borrowed}` : exType === "weights" && t.load === null ? "First time: enter your weight" : "First time";
+    }
+    const goal = [];
+    for (let i = 0; i < t.sets; i++) goal.push({ load: plateUp ? null : t.load, reps: t.reps ? t.reps.min : null, secs: t.secs });
+    return { how: "free", when: prog.when, every: prog.every, sets: t.sets, reps: t.reps, secs: t.secs, load: t.load, plateUp, plateMode: plateMode(prog, ex, settings), step: 0, stepCount: 0, change, delta, hint, goal, complete: P ? itemComplete(P.item) : null, held: false, finalStep: false, last: lastInfo };
   }
   // The part of a target saved with a logged exercise
   function snapshot(t) { return { sets: t.sets, reps: t.reps, secs: t.secs, load: t.load, step: t.step, stepCount: t.stepCount, how: t.how, when: t.when, every: t.every, change: t.change, delta: t.delta, plateUp: !!t.plateUp }; }
@@ -948,6 +1027,7 @@ html.in-session, html.in-session body { overflow: hidden; }
   function setsDone(item) {
     const done = (item.sets || []).filter((s) => s && s.done);
     if (!done.length) return "";
+    if (item.exType === "check" || done.every((s) => num(s.load) === null && num(s.reps) === null && num(s.secs) === null)) return "Done";
     const side = item.side ? " each side" : "";
     const secs = done.map((s) => num(s.secs));
     if (secs.some((v) => v !== null)) {
@@ -1035,39 +1115,150 @@ html.in-session, html.in-session body { overflow: hidden; }
 
   // ---------- Starting data ----------
   const clone = (o) => JSON.parse(JSON.stringify(o));
-  function newSlot(exId, o, settings, rand) {
+  // How an exercise is done in one family: sets and reps, its starting level and its progression (its own or a model)
+  function newSetup(o, settings) {
     const st = settings || DEFAULT_SETTINGS, p = st.prog || DEFAULT_SETTINGS.prog;
     return {
-      id: uid("sl", rand), exId, sets: clampSets(o.sets || 3), reps: o.reps ? normReps(o.reps) : null, secs: num(o.secs), load: num(o.load), step: 0, at: "", note: "",
-      prog: o.prog || { how: o.how || null, when: o.when || p.when, every: p.every, by: null, hold: p.hold !== false, steps: [] }
+      sets: clampSets(o.sets || 3), reps: o.reps ? normReps(o.reps) : null, secs: num(o.secs), load: num(o.load), step: 0, at: "",
+      prog: o.prog || { how: o.how || null, when: o.when || p.when, every: p.every, by: null, hold: p.hold !== false, steps: [], model: o.model || null }
     };
   }
-  function seedState(rand) {
-    const cop = { id: uid("ex", rand), name: "Copenhagen plank", type: "timed", equip: null, side: true, kind: "physio" };
-    const slot = newSlot(cop.id, { sets: 4, secs: 20, prog: { how: "steps", when: "manual", every: 1, by: null, hold: true, steps: [{ sets: 4, reps: null, secs: 20, load: null }, { sets: 3, reps: null, secs: 30, load: null }] } }, null, rand);
+  const newSlot = (exId, rand) => ({ id: uid("sl", rand), exId, note: "" });
+
+  // ---------- Progression models ----------
+  // A model is a reusable progression: a rep ladder (double progression) or custom steps
+  function modelSteps(m) {
+    if (!m) return [];
+    if (m.type === "ladder") {
+      const lo = Math.max(1, Math.round(num(m.from) || 1)), hi = Math.max(lo, Math.min(lo + 15, Math.round(num(m.to) || lo)));
+      const out = [];
+      for (let r = lo; r <= hi; r++) out.push({ sets: clampSets(m.sets), reps: { min: r, max: r }, secs: null, load: null });
+      return out;
+    }
+    return normSteps(m.steps);
+  }
+  function normModel(m) {
+    if (!m || typeof m.id !== "string" || !String(m.name || "").trim()) return null;
+    const type = m.type === "steps" ? "steps" : "ladder", by = num(m.by);
     return {
-      exercises: [cop],
-      routines: [{ id: uid("rt", rand), name: "Physio", kind: "physio", slots: [slot] }, { id: uid("rt", rand), name: "Stretch routine", kind: "stretch", slots: [] }],
-      split: [], settings: clone(DEFAULT_SETTINGS), splitOverride: null
+      id: m.id, name: String(m.name).trim().slice(0, 60), type, sets: clampSets(m.sets || 3),
+      from: Math.max(1, Math.round(num(m.from) || 6)), to: Math.max(1, Math.round(num(m.to) || 10)), steps: normSteps(m.steps),
+      loop: type === "ladder" ? true : !!m.loop, when: WHENS.includes(m.when) ? m.when : "session", every: Math.max(1, Math.min(12, Math.round(num(m.every) || 1))),
+      hold: m.hold !== false, by: by !== null && by > 0 ? by : null, plate: m.plate === true ? true : m.plate === false ? false : null
+    };
+  }
+  // The setup with its model filled in: sets, reps and progression come from the model; weight added can be the exercise's own
+  function resolveSetup(setup, models) {
+    const id = setup && setup.prog && setup.prog.model;
+    const m = id ? (models || []).find((x) => x && x.id === id) : null;
+    const steps = m ? modelSteps(m) : [];
+    if (!steps.length) return setup;
+    const own = setup.prog || {};
+    const reps = m.type === "ladder" ? { min: Math.min(m.from, m.to), max: Math.max(m.from, m.to) } : steps[0].reps;
+    return Object.assign({}, setup, {
+      sets: steps[0].sets, reps, secs: steps[0].secs,
+      prog: { how: "steps", when: m.when, every: m.every, hold: m.hold, steps, loop: m.loop, by: own.by || m.by, plate: own.plate === true || own.plate === false ? own.plate : m.plate, model: m.id }
+    });
+  }
+  // "3 × 6 → 3 × 10, then more weight, every workout"
+  function modelSummary(m) {
+    const st = modelSteps(m);
+    if (!st.length) return "";
+    const a = st[0], b = st[st.length - 1];
+    const f = (x) => `${x.sets} × ${x.secs !== null ? fmtSecs(x.secs) : fmtReps(x.reps)}`;
+    const w = whenLabel({ when: m.when, every: m.every });
+    return `${f(a)} → ${f(b)}${m.loop ? ", then more weight" : ""}, ${w.charAt(0).toLowerCase() + w.slice(1)}`;
+  }
+  function defaultModels(rand) {
+    return [["Primary", 6, 10], ["Secondary", 8, 12], ["Isolation", 10, 15]].map(([tag, from, to]) => ({ id: uid("md", rand), name: `Double progression – ${tag}`, type: "ladder", sets: 3, from, to, steps: [], loop: true, when: "session", every: 1, hold: true, by: null, plate: null }));
+  }
+
+  function seedState(rand) {
+    const cop = { id: uid("ex", rand), name: "Copenhagen plank", type: "timed", equip: null, side: true, kind: "physio", style: null };
+    const setups = {};
+    setups[setupKey(cop.id, "physio")] = newSetup({ sets: 4, secs: 20, prog: { how: "steps", when: "manual", every: 1, by: null, hold: true, steps: [{ sets: 4, reps: null, secs: 20, load: null }, { sets: 3, reps: null, secs: 30, load: null }], model: null } });
+    return {
+      v: 2, exercises: [cop], setups, models: defaultModels(rand), split: [], splitOverride: null, preloads: [],
+      routines: [{ id: uid("rt", rand), name: "Physio", kind: "physio", family: null, slots: [newSlot(cop.id, rand)] }, { id: uid("rt", rand), name: "Stretch routine", kind: "stretch", family: null, slots: [] }]
     };
   }
   // Workout exercises, physio exercises and stretches are separate lists: a name only matches within its own kind
   function findExercise(exercises, name, kind) { const k = String(name || "").trim().toLowerCase(); return (exercises || []).find((e) => e && String(e.name).trim().toLowerCase() === k && (!kind || (e.kind || "workout") === kind)) || null; }
   // A starter split's workouts, reusing exercises he already has by name
-  function applyTemplate(key, exercises, settings, rand) {
+  function applyTemplate(key, exercises, settings, rand, family) {
     const tpl = TEMPLATES.find((t) => t.key === key);
     if (!tpl) return null;
-    const all = (exercises || []).slice(), added = [], routines = [];
+    const fam = FAMILIES.includes(family) ? family : DEFAULT_FAMILY;
+    const all = (exercises || []).slice(), added = [], routines = [], setups = {};
     for (const [rname, list] of tpl.routines) {
       const slots = [];
       for (const [name, type, equip, sets, a, b] of list) {
         let ex = findExercise(all, name, "workout");
-        if (!ex) { ex = { id: uid("ex", rand), name, type, equip: type === "weights" ? equip : null, side: false, kind: "workout" }; all.push(ex); added.push(ex); }
-        slots.push(newSlot(ex.id, ex.type === "timed" ? { sets, secs: a } : { sets, reps: { min: a, max: b } }, settings, rand));
+        if (!ex) { ex = { id: uid("ex", rand), name, type, equip: type === "weights" ? equip : null, side: false, kind: "workout", style: null }; all.push(ex); added.push(ex); }
+        slots.push(newSlot(ex.id, rand));
+        const k = setupKey(ex.id, fam);
+        if (!setups[k]) setups[k] = newSetup(ex.type === "timed" ? { sets, secs: a } : { sets, reps: { min: a, max: b } }, settings);
       }
-      routines.push({ id: uid("rt", rand), name: rname, kind: "workout", slots });
+      routines.push({ id: uid("rt", rand), name: rname, kind: "workout", family: fam, slots });
     }
-    return { exercises: added, routines, split: routines.map((r) => ({ routineId: r.id })) };
+    return { exercises: added, routines, setups, split: routines.map((r) => ({ routineId: r.id })) };
+  }
+
+  // ---------- Saved plans: from settings on each workout's exercise (first version) to setups per exercise and family ----------
+  function migratePlan(raw, rand) {
+    const d = raw && typeof raw === "object" ? clone(raw) : {};
+    if (d.v === 2) return { plan: d, changed: false };
+    const setups = {};
+    const routines = (Array.isArray(d.routines) ? d.routines : []).filter((r) => r && typeof r.id === "string").map((r) => {
+      const kind = ROUTINE_KINDS.includes(r.kind) ? r.kind : "workout";
+      const family = kind === "workout" ? (FAMILIES.includes(r.family) ? r.family : DEFAULT_FAMILY) : null;
+      const fam = familyOf({ kind, family });
+      const slots = (Array.isArray(r.slots) ? r.slots : []).filter((x) => x && typeof x.id === "string" && typeof x.exId === "string").map((x) => {
+        const key = setupKey(x.exId, fam);
+        if (!setups[key]) setups[key] = { sets: x.sets, reps: x.reps || null, secs: x.secs === undefined ? null : x.secs, load: x.load === undefined ? null : x.load, step: x.step || 0, at: x.at || "", prog: x.prog || null };
+        return { id: x.id, exId: x.exId, note: x.note || "" };
+      });
+      return { id: r.id, name: r.name, kind, family, slots };
+    });
+    const seen = new Set();
+    const split = (Array.isArray(d.split) ? d.split : []).filter((x) => x && typeof x.routineId === "string" && !seen.has(x.routineId) && seen.add(x.routineId)).map((x) => ({ routineId: x.routineId }));
+    return { plan: { v: 2, exercises: Array.isArray(d.exercises) ? d.exercises : [], routines, setups, models: Array.isArray(d.models) ? d.models : defaultModels(rand), split, splitOverride: null, preloads: Array.isArray(d.preloads) ? d.preloads : [] }, changed: true };
+  }
+
+  // ---------- His Upper and Lower (Hypertrophy), loaded once ----------
+  const PRELOAD_UL = [
+    ["Upper", [["Flat DB bench", "weights", "free", "Primary"], ["Pull-ups", "bodyweight", null, "Primary"], ["Pec flyes", "weights", "machine", "Secondary"], ["Cable rows", "weights", "machine", "Secondary"], ["Lateral raises", "weights", "free", "Isolation"], ["Face pulls", "weights", "machine", "Isolation"], ["Biceps curls", "weights", "free", "Isolation"], ["Triceps pushdowns", "weights", "machine", "Isolation"]]],
+    ["Lower", [["Barbell RDLs", "weights", "free", "Primary"], ["Goblet squats", "weights", "free", "Primary"], ["Hamstring curls", "weights", "machine", "Secondary"], ["Quad extensions", "weights", "machine", "Secondary"], ["Calf raises", "weights", "machine", "Isolation"], ["Copenhagen planks", "timed", null, "free"]]]
+  ];
+  function preloadUpperLower(plan, settings, rand) {
+    const p = clone(plan);
+    p.preloads = (p.preloads || []).concat(["upper-lower-1"]);
+    p.models = p.models || []; p.setups = p.setups || {}; p.exercises = p.exercises || []; p.routines = p.routines || []; p.split = p.split || [];
+    const presets = defaultModels(rand);
+    const modelFor = (tag) => {
+      const name = `Double progression – ${tag}`;
+      let m = p.models.find((x) => x && x.name === name);
+      if (!m) { m = presets.find((x) => x.name === name); p.models.push(m); }
+      return m;
+    };
+    const fam = "hypertrophy", made = [];
+    for (const [rname, list] of PRELOAD_UL) {
+      const taken = p.routines.some((r) => r.kind === "workout" && String(r.name).toLowerCase() === rname.toLowerCase());
+      const rt = { id: uid("rt", rand), name: taken ? `${rname} (new)` : rname, kind: "workout", family: fam, slots: [] };
+      for (const [name, type, equip, tag] of list) {
+        let ex = findExercise(p.exercises, name, "workout");
+        if (!ex) { ex = { id: uid("ex", rand), name, type, equip: type === "weights" ? equip : null, side: name === "Copenhagen planks", kind: "workout", style: null }; p.exercises.push(ex); }
+        rt.slots.push(newSlot(ex.id, rand));
+        const key = setupKey(ex.id, fam);
+        if (p.setups[key]) continue;
+        if (tag === "free") p.setups[key] = newSetup({ sets: 3, secs: 20, prog: { how: "free", when: "session", every: 1, by: null, hold: true, steps: [], model: null } }, settings);
+        else { const m = modelFor(tag); p.setups[key] = newSetup({ sets: 3, reps: { min: m.from, max: m.to }, prog: { how: "steps", when: m.when, every: 1, by: null, hold: true, steps: [], model: m.id } }, settings); }
+      }
+      p.routines.push(rt); made.push(rt);
+    }
+    const active = !p.split.length;
+    if (active) { p.split = made.map((r) => ({ routineId: r.id })); p.splitOverride = null; }
+    return { plan: p, routines: made, active };
   }
 
   const Engine = {
@@ -1078,8 +1269,10 @@ html.in-session, html.in-session body { overflow: hidden; }
     num, r2, eqNum, fmtNum, fmtSecs, fmtMinutes, plural, normReps, clampSets, fmtReps, prescription,
     defaultHow, normSteps, normProg, whenLabel, plateMode, increment, progLabel,
     cmpLog, performed, historyFor, exerciseHistory, latestAnySlot, itemLevel, sameLevel, itemComplete, topOfRange,
-    nextTarget, stepDelta, snapshot, splitState, countByType, setStatus, setShort, skippedSetsText, setsSummary, progressSummary, toCSV, validLog, uid,
-    clone, newSlot, seedState, findExercise, applyTemplate
+    nextTarget, stepDelta, planDelta, snapshot, splitState, countByType, setStatus, setShort, skippedSetsText, setsSummary, progressSummary, toCSV, validLog, uid,
+    clone, newSetup, newSlot, seedState, findExercise, applyTemplate,
+    FAMILIES, FAMILY_LABEL, DEFAULT_FAMILY, logFamily, familyOf, setupKey,
+    modelSteps, normModel, resolveSetup, modelSummary, defaultModels, migratePlan, preloadUpperLower
   };
   if (typeof module !== "undefined" && module.exports) module.exports = Engine;
   else root.Engine = Engine;
@@ -1129,7 +1322,8 @@ const ICON = {
   search: ic('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'),
   download: ic('<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"/>'),
   upload: ic('<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 20h14"/>'),
-  minus: ic('<path d="M5 12h14"/>')
+  minus: ic('<path d="M5 12h14"/>'),
+  grip: ic('<circle cx="9" cy="6.5" r="1" fill="currentColor"/><circle cx="15" cy="6.5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="17.5" r="1" fill="currentColor"/><circle cx="15" cy="17.5" r="1" fill="currentColor"/>')
 };
 const badge = (type, cls) => `<span class="pb pb-${esc(type)}${cls ? " " + cls : ""}" aria-hidden="true">${E.TYPE_LETTER[type] || "?"}</span>`;
 
@@ -1158,34 +1352,40 @@ const cur = () => S.edit || S.draft;
 function normExercise(x) {
   if (!x || typeof x.id !== "string" || !String(x.name || "").trim()) return null;
   const type = E.EX_TYPES.includes(x.type) ? x.type : "weights";
-  return { id: x.id, name: String(x.name).trim().slice(0, 80), type, equip: type === "weights" ? (x.equip === "machine" ? "machine" : "free") : null, side: !!x.side, kind: E.EX_KINDS.includes(x.kind) ? x.kind : null };
+  return { id: x.id, name: String(x.name).trim().slice(0, 80), type, equip: type === "weights" ? (x.equip === "machine" ? "machine" : "free") : null, side: !!x.side, kind: E.EX_KINDS.includes(x.kind) ? x.kind : null, style: type === "timed" && x.style === "release" ? "release" : null };
 }
-function normSlot(s, exIds) {
-  if (!s || typeof s.id !== "string" || !exIds.has(s.exId)) return null;
-  const p = s.prog && typeof s.prog === "object" ? s.prog : {};
-  return {
-    id: s.id, exId: s.exId, sets: E.clampSets(s.sets), reps: E.normReps(s.reps), secs: E.num(s.secs), load: E.num(s.load),
-    step: Math.max(0, Math.round(E.num(s.step) || 0)), at: typeof s.at === "string" ? s.at : "", note: typeof s.note === "string" ? s.note.slice(0, 200) : "",
-    prog: { how: E.HOWS.includes(p.how) ? p.how : null, when: E.WHENS.includes(p.when) ? p.when : "weeks", every: Math.max(1, Math.min(12, Math.round(E.num(p.every) || 1))), by: E.num(p.by) > 0 ? E.num(p.by) : null, hold: p.hold !== false, steps: E.normSteps(p.steps), loop: !!p.loop, plate: p.plate === true ? true : p.plate === false ? false : null }
-  };
+function normProgFields(p) {
+  const q = p && typeof p === "object" ? p : {};
+  return { how: E.HOWS.includes(q.how) ? q.how : null, when: E.WHENS.includes(q.when) ? q.when : "weeks", every: Math.max(1, Math.min(12, Math.round(E.num(q.every) || 1))), by: E.num(q.by) > 0 ? E.num(q.by) : null, hold: q.hold !== false, steps: E.normSteps(q.steps), loop: !!q.loop, plate: q.plate === true ? true : q.plate === false ? false : null, model: typeof q.model === "string" ? q.model : null };
 }
+function normSetup(x) {
+  if (!x || typeof x !== "object") return null;
+  return { sets: E.clampSets(x.sets), reps: E.normReps(x.reps), secs: E.num(x.secs), load: E.num(x.load), step: Math.max(0, Math.round(E.num(x.step) || 0)), at: typeof x.at === "string" ? x.at : "", prog: normProgFields(x.prog) };
+}
+// The plan: exercises, workouts (each with a family), how each exercise is set up per family, models, the active split
 function normPlan(p) {
   const d = p && typeof p === "object" ? p : {};
   const exercises = (Array.isArray(d.exercises) ? d.exercises : []).map(normExercise).filter(Boolean);
   const exIds = new Set(exercises.map((x) => x.id));
-  const routines = (Array.isArray(d.routines) ? d.routines : []).filter((r) => r && typeof r.id === "string").map((r) => ({
-    id: r.id, name: String(r.name || "Workout").trim().slice(0, 60) || "Workout", kind: E.ROUTINE_KINDS.includes(r.kind) ? r.kind : "workout",
-    slots: (Array.isArray(r.slots) ? r.slots : []).map((s) => normSlot(s, exIds)).filter(Boolean)
-  }));
+  const routines = (Array.isArray(d.routines) ? d.routines : []).filter((r) => r && typeof r.id === "string").map((r) => {
+    const kind = E.ROUTINE_KINDS.includes(r.kind) ? r.kind : "workout";
+    return {
+      id: r.id, name: String(r.name || "Workout").trim().slice(0, 60) || "Workout", kind, family: kind === "workout" ? (E.FAMILIES.includes(r.family) ? r.family : E.DEFAULT_FAMILY) : null,
+      slots: (Array.isArray(r.slots) ? r.slots : []).filter((x) => x && typeof x.id === "string" && exIds.has(x.exId)).map((x) => ({ id: x.id, exId: x.exId, note: typeof x.note === "string" ? x.note.slice(0, 200) : "" }))
+    };
+  });
   // Exercises saved before they had a kind take it from the routines they're in
   const used = new Map();
   for (const r of routines) for (const sl of r.slots) { const was = used.get(sl.exId); if (!was || r.kind === "stretch" || (r.kind === "physio" && was === "workout")) used.set(sl.exId, r.kind); }
   for (const e of exercises) if (!e.kind) e.kind = used.get(e.id) || "workout";
-  const rIds = new Set(routines.filter((r) => r.kind === "workout").map((r) => r.id));
-  const split = (Array.isArray(d.split) ? d.split : []).filter((x) => x && rIds.has(x.routineId)).map((x) => ({ routineId: x.routineId }));
+  const setups = {};
+  for (const [k, v] of Object.entries(d.setups && typeof d.setups === "object" ? d.setups : {})) { const exId = k.split("|")[0]; const st = exIds.has(exId) ? normSetup(v) : null; if (st) setups[k] = st; }
+  const models = (Array.isArray(d.models) ? d.models : []).map(E.normModel).filter(Boolean);
+  const rIds = new Set(routines.filter((r) => r.kind === "workout").map((r) => r.id)), seen = new Set();
+  const split = (Array.isArray(d.split) ? d.split : []).filter((x) => x && rIds.has(x.routineId) && !seen.has(x.routineId) && seen.add(x.routineId)).map((x) => ({ routineId: x.routineId }));
   const o = d.splitOverride;
   const splitOverride = o && Number.isInteger(o.pos) && o.pos >= 0 && o.pos < split.length && E.isDate(o.date) ? { pos: o.pos, date: o.date, at: String(o.at || "") } : null;
-  return { exercises, routines, split, splitOverride };
+  return { v: 2, exercises, routines, setups, models, split, splitOverride, preloads: (Array.isArray(d.preloads) ? d.preloads : []).filter((x) => typeof x === "string") };
 }
 function normSettings(x) {
   const d = x && typeof x === "object" ? x : {};
@@ -1210,8 +1410,30 @@ const rtById = (id) => S.plan.routines.find((r) => r.id === id) || null;
 const routinesOf = (kind) => S.plan.routines.filter((r) => r.kind === kind);
 const splitInfo = () => E.splitState(S.plan.split, S.logs, S.plan.splitOverride);
 function nextRoutine() { const s = splitInfo(); return s.next >= 0 ? rtById(s.routineId) : null; }
-function targetFor(slot, ex, date, o) { return E.nextTarget(slot, ex, S.logs, S.settings, date || S.today, o); }
-function exTypeLabel(ex) { return !ex ? "" : ex.type === "weights" ? (ex.equip === "machine" ? "Machine" : "Free weight") : ex.type === "bodyweight" ? "Bodyweight" : "Timed hold"; }
+// An exercise's progression is shared by the workouts of one family (Strength, Hypertrophy, Mixed; physio and stretching are their own)
+const famOf = (rt) => E.familyOf(rt);
+const famLabel = (fam) => E.FAMILY_LABEL[fam] || (fam === "physio" ? "Physio" : fam === "stretch" ? "Stretching" : "");
+const setupFor = (exId, fam) => S.plan.setups[E.setupKey(exId, fam)] || null;
+function slotDefaults(ex, fam) {
+  if (ex && ex.type === "check") return { sets: 1, how: "none" };
+  if (ex && ex.style === "release") return { sets: 1, secs: 60, how: "none" };
+  if (ex && ex.type === "timed") return fam === "stretch" ? { sets: 2, secs: 30, how: "none" } : { sets: 3, secs: 30, when: fam === "physio" ? "manual" : undefined };
+  return fam === "stretch" ? { sets: 2, reps: { min: 10, max: 10 }, how: "none" } : { sets: 3, reps: { min: 8, max: 12 }, when: fam === "physio" ? "manual" : undefined };
+}
+// Set up an exercise in a family the first time it's used there (copying another setup's sets and progression, not its weight)
+function ensureSetup(exId, fam, from) {
+  const k = E.setupKey(exId, fam);
+  if (!S.plan.setups[k]) {
+    const ex = exById(exId);
+    S.plan.setups[k] = from ? Object.assign(clone(from), { load: null, step: 0, at: "" }) : E.newSetup(slotDefaults(ex, fam), S.settings);
+  }
+  return S.plan.setups[k];
+}
+const setupOrDefault = (exId, fam) => setupFor(exId, fam) || E.newSetup(slotDefaults(exById(exId), fam), S.settings);
+const resolved = (setup) => E.resolveSetup(setup, S.plan.models);
+function targetFor(setup, ex, date, fam, o) { return E.nextTarget(resolved(setup), ex, S.logs, S.settings, date || S.today, Object.assign({ family: fam || E.DEFAULT_FAMILY }, o || {})); }
+const modelById = (id) => S.plan.models.find((m) => m.id === id) || null;
+function exTypeLabel(ex) { return !ex ? "" : ex.type === "weights" ? (ex.equip === "machine" ? "Machine" : "Free weight") : ex.type === "bodyweight" ? "Bodyweight" : ex.type === "check" ? "Tick it off" : ex.style === "release" ? "Myofascial release" : "Timed hold"; }
 const EX_KIND_HEAD = { workout: "Workout exercises", physio: "Physio exercises", stretch: "Stretches" };
 function kindNoun(kind, n) { return kind === "stretch" ? plural(n, "stretch", "stretches") : plural(n, "exercise"); }
 
@@ -1385,14 +1607,18 @@ const chipValue = (root, name) => { const b = $(`[data-chip="${name}"][aria-chec
 async function boot() {
   renderChrome(); render();
   await DB.ready;
-  let plan = DB.get("plan");
-  if (!plan) {
-    const seed = E.seedState();
-    plan = { exercises: seed.exercises, routines: seed.routines, split: [], splitOverride: null };
-    S.plan = normPlan(plan); S.settings = normSettings(seed.settings);
-    await DB.setKV("plan", S.plan).catch(() => {});
-    await DB.setKV("settings", S.settings).catch(() => {});
-  } else { S.plan = normPlan(plan); S.settings = normSettings(DB.get("settings")); }
+  const raw = DB.get("plan");
+  S.settings = normSettings(DB.get("settings"));
+  if (!DB.get("settings")) await DB.setKV("settings", S.settings).catch(() => {});
+  const mig = E.migratePlan(raw || E.seedState());
+  let plan = mig.plan, changed = mig.changed || !raw, preloadNote = "";
+  if (!(plan.preloads || []).includes("upper-lower-1")) {
+    const r = E.preloadUpperLower(plan, S.settings);
+    plan = r.plan; changed = true;
+    preloadNote = r.active ? "Upper and Lower are loaded with double progression." : "Upper and Lower are loaded. They're under Inactive in Plan.";
+  }
+  S.plan = normPlan(plan);
+  if (changed) await DB.setKV("plan", S.plan).catch(() => {});
   S.draft = normDraft(DB.get("draft"));
   S.meta = DB.get("meta") || {};
   loadLogs();
@@ -1400,14 +1626,15 @@ async function boot() {
   render();
   DB.onChange((m) => {
     if (m.kind === "kv") {
-      if (m.key === "plan") S.plan = normPlan(m.value);
+      if (m.key === "plan") S.plan = normPlan(E.migratePlan(m.value).plan);
       else if (m.key === "settings") S.settings = normSettings(m.value);
       else if (m.key === "meta") S.meta = m.value || {};
       else if (m.key === "draft" && !S.sessionOpen) S.draft = normDraft(m.value);
     } else loadLogs();
-    if (!S.sessionOpen && !sheets.length) scheduleRender();
+    if (!S.sessionOpen && !sheets.length && !drag) scheduleRender();
   });
   if (DB.mode === "memory") setTimeout(() => toast("This browser won't keep your log (Private Browsing?). Open the app normally to save it."), 800);
+  else if (preloadNote) setTimeout(() => toast(preloadNote), 600);
 }
 
 /* Today: the next workout in the split, quick logging, this week. Plus the log sheet and the simple activity forms. */
@@ -1419,7 +1646,7 @@ function dots(ls, max) {
   const m = max || 3;
   return ls.slice(0, m).map((l) => badge(l.type)).join("") + (ls.length > m ? `<span class="pb-more">+${ls.length - m}</span>` : "");
 }
-const FREESTYLE_FOR = ["Full body", "Upper body", "Lower body", "Arms", "Shoulders", "Core", "Conditioning", "Cardio"];
+const FREESTYLE_FOR = ["Chest", "Back", "Full body", "Upper body", "Lower body", "Arms", "Shoulders", "Core", "Conditioning", "Cardio"];
 
 function viewToday() {
   const d = S.today;
@@ -1452,20 +1679,20 @@ function heroCard() {
   if (!S.plan.split.length) {
     const has = routinesOf("workout").length > 0;
     return `<section class="hero">
-      <h1 class="hero-name long">Set up your split</h1>
-      <p class="hero-sub">Add the workouts you rotate through. This card then loads the next one with its weights, ready to start.</p>
-      <div class="hero-actions">${has ? `<button class="btn red" data-act="tab" data-tab="plan">Add workouts to your split</button>` : `<button class="btn red" data-act="starter">Use a starter split</button><button class="btn on-slab" data-act="new-routine" data-kind="workout">Build my own</button>`}</div>
+      <h1 class="hero-name long">${has ? "No active workouts" : "Set up your split"}</h1>
+      <p class="hero-sub">${has ? "Drag the workouts you're rotating through into Active in Plan. This card then loads the next one with its weights." : "Add the workouts you rotate through. This card then loads the next one with its weights, ready to start."}</p>
+      <div class="hero-actions">${has ? `<button class="btn red" data-act="tab" data-tab="plan">Go to Plan</button>` : `<button class="btn red" data-act="starter">Use a starter split</button><button class="btn on-slab" data-act="new-routine" data-kind="workout">Build my own</button>`}</div>
     </section>`;
   }
   const info = splitInfo(), rt = rtById(info.routineId);
   const strip = `<ol class="splitstrip" aria-label="Your split">${S.plan.split.map((x, i) => { const r = rtById(x.routineId); const st = i === info.next ? "next" : info.done[i] ? "done" : ""; return `<li class="${st}"${i === info.next ? ' aria-current="step"' : ""}><i aria-hidden="true"></i>${esc(r ? r.name : "")}${st === "done" ? '<span class="sr"> (done this round)</span>' : ""}</li>`; }).join("")}</ol>`;
-  const rows = [];
+  const rows = [], fam = famOf(rt);
   for (const slot of rt.slots) {
     const ex = exById(slot.exId); if (!ex) continue;
-    const t = targetFor(slot, ex, S.today, { fallback: true });
-    const val = ex.type === "weights" ? (t.load !== null ? `${E.fmtNum(t.load)}<small>lb</small>` : `<span class="hl-blank">Set weight</span>`) : "";
+    const t = targetFor(setupOrDefault(ex.id, fam), ex, S.today, fam, { fallback: true });
+    const val = ex.type === "weights" ? (t.load !== null ? `${E.fmtNum(t.load)}<small>lb</small>` : `<span class="hl-blank">Set in workout</span>`) : "";
     const tag = t.change === "up" ? `<span class="tag up">${esc(t.delta)}</span>` : t.change === "held" ? `<span class="tag held">Held</span>` : "";
-    rows.push(`<li><span class="hl-name">${esc(ex.name)}</span><span class="hl-pres">${esc(E.prescription(t, ex.side))}</span><span class="hl-val">${val}${tag}</span></li>`);
+    rows.push(`<li><span class="hl-name">${esc(ex.name)}</span><span class="hl-pres">${esc(ex.type === "check" ? "Tick it off" : E.prescription(t, ex.side))}</span><span class="hl-val">${val}${tag}</span></li>`);
   }
   const more = rows.length > 8 ? `<li class="hl-more">${rows.length - 7} more</li>` : "";
   return `<section class="hero">
@@ -1550,7 +1777,7 @@ function logChoice(k, date) {
   }
   if (list.length === 1 && kind !== "workout") return startSession(list[0].id, date);
   const nx = nextRoutine();
-  choiceSheet(kind === "workout" ? "Which workout?" : kind === "physio" ? "Which physio routine?" : "Which stretch routine?", list.map((r) => [r.id, r.name, `${kindNoun(r.kind, r.slots.length)}${nx && nx.id === r.id ? ", next in your split" : ""}`, kind]), (id) => startSession(id, date));
+  choiceSheet(kind === "workout" ? "Which workout?" : kind === "physio" ? "Which physio routine?" : "Which stretch routine?", list.map((r) => [r.id, r.name, `${kindNoun(r.kind, r.slots.length)}${nx && nx.id === r.id ? ", next in your split" : kind === "workout" && !inSplit(r.id) ? ", inactive" : ""}`, kind]), (id) => startSession(id, date));
 }
 
 // ---------- Freestyle, BJJ and other activities ----------
@@ -1615,14 +1842,16 @@ function openActivityForm(type, o) {
 const SKIP_REASONS = ["Pain or injury", "Too sore", "Short on time", "Equipment busy", "Felt off"];
 let editDirty = false;
 
-function makeItem(slot, ex, date, o) {
-  const t = targetFor(slot, ex, date, o);
+// One exercise in a session, loaded with its next target from its setup in this family
+function makeItem(slot, ex, date, fam, o) {
+  const t = targetFor(setupOrDefault(ex.id, fam), ex, date, fam, o);
   return {
-    key: uid("it"), slotId: slot.id, exId: ex.id, name: ex.name, exType: ex.type, equip: ex.equip, side: !!ex.side,
+    key: uid("it"), slotId: slot.id, exId: ex.id, name: ex.name, exType: ex.type, equip: ex.equip, side: !!ex.side, style: ex.style || null,
     status: "open", skipReason: "", skipNote: "", note: "", plan: slot.note || "", hint: t.hint || "",
     target: E.snapshot(t), sets: t.goal.map((g) => ({ load: g.load, reps: g.reps, secs: g.secs, done: false })), next: null
   };
 }
+const sessionFam = (s) => s.family || (s.type === "physio" || s.type === "stretch" ? s.type : E.DEFAULT_FAMILY);
 
 async function startSession(routineId, date) {
   const rt = rtById(routineId);
@@ -1634,10 +1863,17 @@ async function startSession(routineId, date) {
     if (!ok) return;
   }
   if (!rt.slots.length) { toast(`Add ${rt.kind === "stretch" ? "stretches" : "exercises"} to ${rt.name} first.`); return editRoutine(rt.id); }
-  const items = [];
-  for (const slot of rt.slots) { const ex = exById(slot.exId); if (ex) items.push(makeItem(slot, ex, d, { fallback: true })); }
+  const fam = famOf(rt), items = [];
+  let made = false;
+  for (const slot of rt.slots) {
+    const ex = exById(slot.exId);
+    if (!ex) continue;
+    if (!setupFor(ex.id, fam)) { ensureSetup(ex.id, fam); made = true; }
+    items.push(makeItem(slot, ex, d, fam, { fallback: true }));
+  }
+  if (made) savePlan();
   S.edit = null;
-  S.draft = { id: uid("lg"), type: rt.kind === "workout" ? "workout" : rt.kind, routineId: rt.id, title: rt.name, date: d, startedAt: nowISO(), notes: "", items };
+  S.draft = { id: uid("lg"), type: rt.kind === "workout" ? "workout" : rt.kind, routineId: rt.id, title: rt.name, family: fam, date: d, startedAt: nowISO(), notes: "", items };
   await saveDraftNow();
   openSession();
 }
@@ -1697,7 +1933,7 @@ function renderSession() {
 
 function lastText(it, s) {
   const before = (e) => e.log.id !== s.id && e.log.date <= s.date && E.performed(e.item);
-  const h = E.historyFor(S.logs, it.slotId, it.exId, s.id).filter(before);
+  const h = E.historyFor(S.logs, it.exId, sessionFam(s), s.id).filter(before);
   let e = h.length ? h[h.length - 1] : null, where = "";
   if (!e) {
     const any = E.exerciseHistory(S.logs, it.exId).filter(before);
@@ -1715,10 +1951,11 @@ function cardHtml(it, i, s) {
   if (it.status === "skipped") {
     return `<article class="ex is-skipped" data-i="${i}"><div class="ex-head"><div class="ex-title"><h3>${esc(it.name)}</h3><p class="ex-skip">Skipped${it.skipReason ? `: ${esc(it.skipReason)}` : ""}</p>${it.skipNote ? `<p class="ex-note">${esc(it.skipNote)}</p>` : ""}</div><button class="btn ghost sm" data-sa="unskip">Undo skip</button></div></article>`;
   }
-  if (s.type === "stretch") {
+  if (s.type === "stretch" || it.exType === "check") {
+    const label = it.exType === "check" ? "Tick it off" : pres;
     return `<article class="ex st${allDone ? " is-done" : ""}" data-i="${i}">
       <button class="tick big${allDone ? " on" : ""}" data-sa="tick-all" aria-pressed="${allDone}" aria-label="${esc(it.name)} done">${ICON.check}</button>
-      <div class="ex-title"><h3>${esc(it.name)}</h3><p class="ex-pres">${esc(pres)}</p>${it.plan ? `<p class="ex-plan">${esc(it.plan)}</p>` : ""}${it.note ? `<p class="ex-note">${esc(it.note)}</p>` : ""}</div>
+      <div class="ex-title"><h3>${esc(it.name)}</h3><p class="ex-pres">${esc(label)}${it.style === "release" ? ` <span class="tag soft">Myofascial</span>` : ""}</p>${it.plan ? `<p class="ex-plan">${esc(it.plan)}</p>` : ""}${it.note ? `<p class="ex-note">${esc(it.note)}</p>` : ""}</div>
       ${more}</article>`;
   }
   const steps = t.how === "steps" && t.stepCount > 1;
@@ -1730,7 +1967,8 @@ function cardHtml(it, i, s) {
   const hint = /^First time: enter/.test(it.hint || "") && it.sets.some((x) => x.load !== null && x.load !== undefined) ? "First time" : it.hint;
   const meta = [hint && (t.change !== "up" || t.plateUp) ? hint : "", lastText(it, s)].filter(Boolean);
   const how = t.how || "none";
-  const nextSel = how === "none" ? "" : `<label class="next-sel"><span>Next time</span><select data-sf="next"><option value=""${!it.next ? " selected" : ""}>Auto</option><option value="up"${it.next === "up" ? " selected" : ""}>Go up</option><option value="hold"${it.next === "hold" ? " selected" : ""}>Stay the same</option></select></label>`;
+  const nextSel = how === "free" ? `<span class="free-btns"><button class="link" data-sa="free-today">${ICON.pencil}Change today</button><button class="link" data-sa="free-next">Next time: ${esc(planText(it, it.nextPlan || defaultPlan(it)))}</button></span>`
+    : how === "none" ? "" : `<label class="next-sel"><span>Next time</span><select data-sf="next"><option value=""${!it.next ? " selected" : ""}>Auto</option><option value="up"${it.next === "up" ? " selected" : ""}>Go up</option><option value="hold"${it.next === "hold" ? " selected" : ""}>Stay the same</option></select></label>`;
   return `<article class="ex${allDone ? " is-done" : ""}" data-i="${i}">
     <div class="ex-head"><div class="ex-title"><h3>${esc(it.name)}</h3><p class="ex-pres">${esc(pres)}${steps ? ` <span class="${t.change === "up" && plainStep ? "tag up" : "step"}">Step ${t.step + 1} of ${t.stepCount}</span>` : ""}${tag}</p>${origin}</div>${more}</div>
     ${it.plan ? `<p class="ex-plan">${esc(it.plan)}</p>` : ""}
@@ -1803,6 +2041,8 @@ ses.addEventListener("click", (e) => {
   if (!it) return;
   if (a === "tick") { const x = it.sets[Number(b.dataset.s)]; if (x) { if (x.skip) { clearSkip(x); x.done = true; } else x.done = !x.done; touched(i); } }
   else if (a === "set-menu") setMenu(i, Number(b.dataset.s));
+  else if (a === "free-next") freeSheet(i, "next");
+  else if (a === "free-today") freeSheet(i, "today");
   else if (a === "tick-all") { const all = it.sets.length > 0 && it.sets.every((x) => x.done); if (!it.sets.length) it.sets.push({ load: null, reps: null, secs: it.target && it.target.secs, done: false }); it.sets.forEach((x) => { clearSkip(x); x.done = !all; }); touched(i); }
   else if (a === "add-set") { const last = it.sets[it.sets.length - 1] || {}; it.sets.push({ load: last.load === undefined ? null : last.load, reps: last.reps === undefined ? null : last.reps, secs: last.secs === undefined ? null : last.secs, done: false }); touched(i); const r = $$(`#session [data-i="${i}"] .set`); const nIn = r.length && $("input", r[r.length - 1]); if (nIn) nIn.focus(); }
   else if (a === "unskip") { it.status = "open"; it.skipReason = ""; it.skipNote = ""; touched(i); }
@@ -1894,12 +2134,13 @@ function swapItem(i) {
   });
 }
 function applySwap(i, ex, scope) {
-  const s = cur(), it = s.items[i], slot = sessionSlot(s, it);
-  const base = slot ? clone(slot) : { id: it.slotId, sets: (it.target && it.target.sets) || it.sets.length || 3, reps: it.target && it.target.reps, secs: it.target && it.target.secs, step: 0, at: "", prog: null };
-  if (scope === "routine" && slot) { slot.exId = ex.id; slot.load = null; slot.at = nowISO(); savePlan(); }
-  // Back to the routine's own exercise: its own weight; anything else starts from that exercise's last weight
-  const tslot = slot && slot.exId === ex.id ? clone(slot) : Object.assign(base, { exId: ex.id, load: null });
-  const fresh = makeItem(tslot, ex, s.date, { fallback: true, excludeLogId: s.id });
+  const s = cur(), it = s.items[i], slot = sessionSlot(s, it), fam = sessionFam(s);
+  // The swapped-in exercise keeps its own progression in this family; the first time, it copies the sets and reps it replaces
+  const from = setupFor(it.exId, fam);
+  if (!setupFor(ex.id, fam)) ensureSetup(ex.id, fam, from && (from.prog || {}).how !== "free" ? from : null);
+  if (scope === "routine" && slot) slot.exId = ex.id;
+  savePlan();
+  const fresh = makeItem(slot || { id: it.slotId, note: "" }, ex, s.date, fam, { fallback: true, excludeLogId: s.id });
   const orig = it.swappedFrom || it.exId;
   fresh.key = it.key; fresh.added = it.added; fresh.note = it.note;
   if (scope !== "routine" && orig !== ex.id) fresh.swappedFrom = orig;
@@ -1912,11 +2153,12 @@ function addToSession() {
   const s = cur(), rt = rtById(s.routineId);
   pickExercise({ title: s.type === "stretch" ? "Add a stretch" : "Add an exercise", kind: rt ? rt.kind : s.type }, (ex) => {
     const add = (scope) => {
-      const slot = E.newSlot(ex.id, slotDefaults(ex, rt ? rt.kind : s.type), S.settings);
-      if (rt && rt.kind === "physio") slot.prog.when = "manual";
-      if (scope === "routine" && rt) { rt.slots.push(slot); savePlan(); }
+      const fam = sessionFam(s), slot = E.newSlot(ex.id);
+      ensureSetup(ex.id, fam);
+      if (scope === "routine" && rt) rt.slots.push(slot);
       else slot.id = uid("xs");
-      const item = makeItem(slot, ex, s.date, { fallback: true, excludeLogId: s.id });
+      savePlan();
+      const item = makeItem(slot, ex, s.date, fam, { fallback: true, excludeLogId: s.id });
       if (scope !== "routine") item.added = true;
       s.items.push(item);
       renderSession(); touched();
@@ -1926,11 +2168,6 @@ function addToSession() {
     choiceSheet(`Add ${ex.name}`, [["today", "Just this session", ""], ["routine", `Add to ${rt.name}`, "It loads every time from now on"]], add);
   });
 }
-function slotDefaults(ex, kind) {
-  if (ex.type === "timed") return kind === "stretch" ? { sets: 2, secs: 30, how: "none" } : { sets: 3, secs: 30 };
-  return kind === "stretch" ? { sets: 2, reps: { min: 10, max: 10 }, how: "none" } : { sets: 3, reps: { min: 8, max: 12 } };
-}
-
 async function sessionBack() {
   if (S.edit) {
     if (editDirty && !(await confirmBox({ title: "Discard your changes?", body: "The session stays as it was saved.", ok: "Discard changes", cancel: "Keep editing", danger: true }))) return;
@@ -1988,9 +2225,11 @@ async function saveSession(minutes) {
     };
     if (it.swappedFrom) o.swappedFrom = it.swappedFrom;
     if (it.added) o.added = true;
+    if (it.nextPlan) o.nextPlan = it.nextPlan;
+    if (it.style) o.style = it.style;
     return o;
   });
-  const log = { id: s.id, date: s.date, type: s.type, title: s.title, routineId: s.routineId || null, split: s.type === "workout", minutes: minutes || null, notes: (s.notes || "").trim(), items, created_at: editing ? s.created_at : nowISO() };
+  const log = { id: s.id, date: s.date, type: s.type, title: s.title, routineId: s.routineId || null, family: sessionFam(s), split: s.type === "workout", minutes: minutes || null, notes: (s.notes || "").trim(), items, created_at: editing ? s.created_at : nowISO() };
   if (editing) log.updated_at = nowISO();
   try { await putLog(log); } catch (e) { return saveErr(e); }
   if (editing) { closeSession(); toast("Changes saved"); return; }
@@ -2045,6 +2284,66 @@ function setMenu(i, si) {
       finish();
     };
   });
+}
+
+// ---------- Freestyle progression: set today's sets, or what next time looks like ----------
+const heaviest = (it) => { const v = it.sets.map((x) => E.num(x.load)).filter((x) => x !== null); return v.length ? Math.max(...v) : E.num((it.target || {}).load); };
+function defaultPlan(it) { const t = it.target || {}; return { sets: E.clampSets(t.sets || it.sets.length), reps: t.reps ? E.normReps(t.reps).min : null, secs: E.num(t.secs), load: it.exType === "weights" ? heaviest(it) : null, plate: false }; }
+function planText(it, p) {
+  const what = E.prescription({ sets: p.sets, reps: p.reps !== null && p.reps !== undefined ? { min: p.reps, max: p.reps } : null, secs: p.secs }, it.side);
+  const w = it.exType !== "weights" ? "" : p.plate ? "next plate" : p.load !== null && p.load !== undefined ? `${E.fmtNum(p.load)} lb` : "";
+  return [what, w].filter(Boolean).join(", ") || "Same as today";
+}
+function freeSheet(i, mode) {
+  const s = cur(), it = s.items[i], ex = exById(it.exId) || { type: it.exType, equip: it.equip };
+  const timed = it.exType === "timed", weights = it.exType === "weights";
+  const p = Object.assign({}, mode === "next" ? (it.nextPlan || defaultPlan(it)) : defaultPlan(it));
+  const inc = E.increment({ how: "free" }, ex, S.settings);
+  const sh = openSheet({ title: mode === "next" ? `${it.name}: next time` : `${it.name}: today` });
+  const stepper = (k, label, step, unit) => `<div class="field"><span class="field-l">${label}</span><span class="stepper"><button type="button" class="icon-btn sm" data-d="${k}" data-v="-${step}" aria-label="Less">${ICON.minus}</button><input id="fs-${k}" inputmode="numeric" pattern="[0-9]*" value="${esc(p[k] === null || p[k] === undefined ? "" : p[k])}" aria-label="${label}"><button type="button" class="icon-btn sm" data-d="${k}" data-v="${step}" aria-label="More">${ICON.plus}</button>${unit ? `<span class="muted">${unit}</span>` : ""}</span></div>`;
+  function draw() {
+    sh.body.innerHTML = `${mode === "next" ? `<p class="muted small">Nothing goes up on its own. What you set here loads next time.</p>` : `<p class="muted small">Changes the sets you haven't ticked yet.</p>`}
+      ${stepper("sets", "Sets", 1, "")}
+      ${timed ? stepper("secs", "Seconds", 5, "s") : it.exType === "check" ? "" : stepper("reps", "Reps", 1, "")}
+      ${weights ? `<div class="field"><span class="field-l">Weight</span>${mode === "next" ? chips("fw", [["same", "Same"], ["inc", `+${E.fmtNum(inc)} lb`], ["plate", "Next plate"]], p.plate ? "plate" : "") : ""}<span class="unit-in"><input id="fs-load" inputmode="decimal" value="${p.plate || p.load === null || p.load === undefined ? "" : esc(E.fmtNum(p.load))}" placeholder="${p.plate ? "Enter it on the day" : "lb"}"><span>lb</span></span></div>` : ""}`;
+    $$("[data-d]", sh.body).forEach((b) => {
+      b.onclick = () => {
+        read(); const k = b.dataset.d, v = Number(b.dataset.v);
+        p[k] = Math.max(k === "sets" ? 1 : 0, (E.num(p[k]) || 0) + v); if (k === "sets") p[k] = Math.min(20, p[k]);
+        draw();
+      };
+    });
+    if (weights && mode === "next") wireChips(sh.body, "fw", (v) => {
+      read();
+      const base = heaviest(it);
+      if (v === "same") { p.plate = false; p.load = base; }
+      else if (v === "inc") { p.plate = false; p.load = base === null ? null : E.r2(base + inc); }
+      else if (v === "plate") { p.plate = true; p.load = null; }
+      draw();
+    });
+    const li = $("#fs-load", sh.body); if (li) li.oninput = () => { if (li.value.trim()) { p.plate = false; $$('[data-chip="fw"]', sh.body).forEach((x) => x.setAttribute("aria-checked", "false")); } };
+  }
+  function read() {
+    for (const k of ["sets", "reps", "secs"]) { const e = $(`#fs-${k}`, sh.body); if (e) p[k] = e.value.trim() === "" ? null : Math.max(0, Math.round(E.num(e.value) || 0)); }
+    const l = $("#fs-load", sh.body); if (l) { const v = l.value.trim(); if (v) { p.load = E.num(v); p.plate = false; } else if (!p.plate) p.load = null; }
+    p.sets = E.clampSets(p.sets || 1);
+  }
+  draw();
+  sh.setFoot(`<button class="btn red block" id="fs-save">${mode === "next" ? "Set for next time" : "Change today"}</button>`);
+  $("#fs-save", sh.foot).onclick = () => {
+    read();
+    if (mode === "next") it.nextPlan = { sets: p.sets, reps: timed ? null : p.reps, secs: timed ? p.secs : null, load: weights && !p.plate ? p.load : null, plate: weights && !!p.plate };
+    else {
+      const tg = it.target || (it.target = {});
+      tg.sets = p.sets;
+      if (timed) tg.secs = p.secs; else if (p.reps !== null && it.exType !== "check") tg.reps = { min: p.reps, max: p.reps };
+      if (weights && p.load !== null) tg.load = p.load;
+      for (const x of it.sets) if (!x.done && !x.skip) { if (timed) x.secs = p.secs; else if (p.reps !== null) x.reps = p.reps; if (weights && p.load !== null) x.load = p.load; }
+      while (it.sets.length < p.sets) it.sets.push({ load: weights ? p.load : null, reps: timed ? null : p.reps, secs: timed ? p.secs : null, done: false });
+      while (it.sets.length > p.sets && !it.sets[it.sets.length - 1].done && !it.sets[it.sets.length - 1].skip) it.sets.pop();
+    }
+    sh.close(true); touched(i);
+  };
 }
 
 /* Calendar: any month or week, each day's activities, and every logged session in detail. */
@@ -2246,20 +2545,50 @@ function openExerciseDetail(id) {
   sh.body.innerHTML = h;
 }
 
-/* Plan: the split, routines (workouts, physio, stretching), exercises and how each one progresses. */
+/* Plan: workouts (active split and inactive), physio and stretching, how each exercise is set up and progresses,
+   progression models, and the exercise list. */
 const KIND_HEAD = { workout: "Workouts", physio: "Physio", stretch: "Stretching" };
 const KIND_NEW = { workout: "New workout", physio: "New physio routine", stretch: "New stretch routine" };
+const FAMILY_CHOICES = E.FAMILIES.map((f) => [f, E.FAMILY_LABEL[f]]);
+// What kind of exercise it is. Stretches get their own list (holds, myofascial release with a ball or roller).
+const EX_CHOICES = {
+  workout: [["free", "Free weight"], ["machine", "Machine"], ["bodyweight", "Bodyweight"], ["timed", "Timed hold"], ["check", "Just tick it off"]],
+  stretch: [["timed", "Hold"], ["release", "Myofascial release"], ["bodyweight", "Reps"], ["check", "Just tick it off"]]
+};
+const kindOf = (ex) => (ex.type === "weights" ? (ex.equip === "machine" ? "machine" : "free") : ex.type === "timed" && ex.style === "release" ? "release" : ex.type);
+const typeOfKind = (k) => (k === "free" || k === "machine" ? "weights" : k === "release" ? "timed" : E.EX_TYPES.includes(k) ? k : "weights");
+function exChoices(exKind, current) {
+  const list = exKind === "stretch" ? EX_CHOICES.stretch : EX_CHOICES.workout;
+  if (!current || list.some(([k]) => k === current)) return list;
+  return list.concat(EX_CHOICES.workout.concat(EX_CHOICES.stretch).filter(([k]) => k === current).slice(0, 1));
+}
+function applyKind(ex, k) {
+  const type = typeOfKind(k);
+  ex.type = type; ex.equip = type === "weights" ? (k === "machine" ? "machine" : "free") : null; ex.style = k === "release" ? "release" : null;
+  if (type === "check") ex.side = false;
+}
+const HOW_CHOICES = {
+  weights: [["load", "Add weight"], ["reps", "Add reps"], ["steps", "Custom steps"], ["free", "Freestyle"], ["none", "Don't progress"]],
+  bodyweight: [["reps", "Add reps"], ["steps", "Custom steps"], ["free", "Freestyle"], ["none", "Don't progress"]],
+  timed: [["time", "Add time"], ["steps", "Custom steps"], ["free", "Freestyle"], ["none", "Don't progress"]]
+};
+// Models count in reps (weights, bodyweight) or seconds (timed holds)
+const modelUnit = (m) => (m && m.type === "steps" && m.steps.length && m.steps[0].secs !== null && !m.steps[0].reps ? "secs" : "reps");
+const modelFits = (m, type) => !!m && (type === "timed" ? modelUnit(m) === "secs" : (type === "weights" || type === "bodyweight") && modelUnit(m) === "reps");
+const qid = (id) => (window.CSS && CSS.escape ? CSS.escape(id) : String(id));
 
 function viewPlan() {
-  const info = splitInfo(), split = S.plan.split, workouts = routinesOf("workout");
+  const info = splitInfo(), { act, ina } = workoutOrder();
   let h = `<h1 class="page-h">Plan</h1>`;
   h += `<section class="sect">
-    <div class="block-head"><h2 class="h2">Your split</h2></div>
-    ${split.length ? `<ol class="splitlist">${split.map((x, i) => { const r = rtById(x.routineId), nm = esc(r.name); return `<li class="${i === info.next ? "is-next" : ""}"><span class="sl-n">${i + 1}</span><span class="sl-name">${nm}${i === info.next ? ` <span class="tag next">Next</span>` : ""}</span><span class="sl-btns"><button class="icon-btn sm" data-act="split-move" data-i="${i}" data-d="-1" aria-label="Move ${nm} up"${i === 0 ? " disabled" : ""}>${ICON.up}</button><button class="icon-btn sm" data-act="split-move" data-i="${i}" data-d="1" aria-label="Move ${nm} down"${i === split.length - 1 ? " disabled" : ""}>${ICON.down}</button><button class="icon-btn sm" data-act="split-remove" data-i="${i}" aria-label="Take ${nm} out of the split">${ICON.x}</button></span></li>`; }).join("")}</ol>`
-      : `<p class="empty">Your split is the order you rotate through your workouts. Add them in order and Today always loads the next one.</p>`}
-    <div class="row-btns">${workouts.length ? `<button class="btn ghost sm" data-act="split-add">${ICON.plus}Add a workout</button>` : ""}${split.length > 1 ? `<button class="btn ghost sm" data-act="change-next">Choose what's next</button>` : ""}</div>
+    <div class="block-head"><h2 class="h2">Workouts</h2><button class="btn ghost sm" data-act="new-routine" data-kind="workout">${ICON.plus}New</button></div>
+    ${act.length + ina.length ? `<p class="muted small">Drag workouts by the dots to change your split. Inactive ones don't rotate, but their exercises still progress.</p>
+      <div class="rot-zone"><h3 class="h3">Active</h3>${rotList("active", act, info)}</div>
+      <div class="rot-zone"><h3 class="h3">Inactive</h3>${rotList("inactive", ina, info)}</div>
+      ${act.length > 1 ? `<div class="row-btns"><button class="btn ghost sm" data-act="change-next">Choose what's next</button></div>` : ""}`
+    : `<p class="empty">No workouts yet.</p><button class="btn red" data-act="starter">Use a starter split</button>`}
   </section>`;
-  for (const kind of E.ROUTINE_KINDS) {
+  for (const kind of ["physio", "stretch"]) {
     const list = routinesOf(kind);
     h += `<section class="sect">
       <div class="block-head"><h2 class="h2">${KIND_HEAD[kind]}</h2><button class="btn ghost sm" data-act="new-routine" data-kind="${kind}">${ICON.plus}New</button></div>
@@ -2267,50 +2596,205 @@ function viewPlan() {
         const names = r.slots.map((s) => (exById(s.exId) || {}).name).filter(Boolean);
         const sub = names.length ? `${names.slice(0, 3).join(", ")}${names.length > 3 ? `, ${names.length - 3} more` : ""}` : `No ${kind === "stretch" ? "stretches" : "exercises"} yet`;
         return `<li><button class="lrow" data-act="edit-routine" data-rt="${esc(r.id)}">${badge(kind)}<span class="lr-main"><strong>${esc(r.name)}</strong><span>${esc(sub)}</span></span>${ICON.right}</button></li>`;
-      }).join("")}</ul>` : `<p class="empty">${kind === "workout" ? "No workouts yet." : kind === "physio" ? "Add the exercises your physio gave you, with their own progressions." : "Add your stretches and they load in order each time."}</p>`}
-      ${kind === "workout" && !list.length ? `<button class="btn red" data-act="starter">Use a starter split</button>` : ""}
+      }).join("")}</ul>` : `<p class="empty">${kind === "physio" ? "Add the exercises your physio gave you, with their own progressions." : "Add your stretches and they load in order each time."}</p>`}
     </section>`;
   }
+  h += `<section class="sect">
+    <div class="block-head"><h2 class="h2">Progression models</h2><button class="btn ghost sm" data-act="new-model">${ICON.plus}New</button></div>
+    ${S.plan.models.length ? `<ul class="loglist">${S.plan.models.map((m) => `<li><button class="lrow wrap" data-act="edit-model" data-id="${esc(m.id)}"><span class="lr-main"><strong>${esc(m.name)}</strong><span>${esc(modelShort(m))}</span></span>${ICON.right}</button></li>`).join("")}</ul>`
+      : `<p class="empty">Save a progression once, like double progression, then apply it to any exercise.</p>`}
+  </section>`;
   h += `<section class="sect"><div class="block-head"><h2 class="h2">Exercises</h2><span class="muted">${S.plan.exercises.length}</span></div><button class="btn ghost block" data-act="exercises">Rename or change exercises</button></section>`;
   return h;
 }
+function rotList(zone, ids, info) {
+  const rows = ids.map((id, i) => {
+    const r = rtById(id), nm = esc(r.name), next = zone === "active" && i === info.next && ids.length > 1;
+    return `<li class="rotrow${next ? " is-next" : ""}" data-rt="${esc(r.id)}">
+      <button class="grip" data-grip="${esc(r.id)}" aria-label="Move ${nm}. Drag, or use the arrow keys." title="Drag to move">${ICON.grip}</button>
+      <span class="rot-n" aria-hidden="true">${zone === "active" ? i + 1 : ""}</span>
+      <button class="rot-main" data-act="edit-routine" data-rt="${esc(r.id)}"><strong>${nm}${next ? ` <span class="tag next">Next</span>` : ""}</strong><span>${esc(famLabel(famOf(r)))}, ${esc(kindNoun("workout", r.slots.length))}</span></button>
+      <button class="icon-btn" data-act="rt-menu" data-rt="${esc(r.id)}" aria-label="More for ${nm}">${ICON.more}</button></li>`;
+  }).join("");
+  const empty = zone === "active" ? "Drag a workout here to rotate through it." : "Drag a workout here to take it out of the rotation.";
+  return `<ol class="rotlist${ids.length ? "" : " is-empty"}" data-zone="${zone}" aria-label="${zone === "active" ? "Active workouts, in split order" : "Inactive workouts"}">${rows}<li class="rot-empty">${empty}</li></ol>`;
+}
+function modelShort(m) {
+  const st = E.modelSteps(m);
+  if (!st.length) return "";
+  const f = (x) => `${x.sets} × ${x.secs !== null ? E.fmtSecs(x.secs) : E.fmtReps(x.reps)}`;
+  return `${f(st[0])} → ${f(st[st.length - 1])}${m.loop && modelUnit(m) === "reps" ? ", then add weight" : ""}`;
+}
 
-ACT["split-move"] = (el) => {
-  const i = Number(el.dataset.i), j = i + Number(el.dataset.d), sp = S.plan.split;
-  if (j < 0 || j >= sp.length) return;
-  [sp[i], sp[j]] = [sp[j], sp[i]];
-  S.plan.splitOverride = null; savePlan(); render();
-  const b = $(`[data-act="split-move"][data-i="${j}"][data-d="${el.dataset.d}"]`) || $(`[data-act="split-move"][data-i="${j}"]`); if (b && !b.disabled) b.focus();
-};
-ACT["split-remove"] = (el) => {
-  const i = Number(el.dataset.i), prev = clone(S.plan.split), prevOv = S.plan.splitOverride, r = rtById(S.plan.split[i].routineId);
-  S.plan.split.splice(i, 1); S.plan.splitOverride = null; savePlan(); render();
-  toast(`${r.name} taken out of the split`, { label: "Undo", run: () => { S.plan.split = prev; S.plan.splitOverride = prevOv; savePlan(); render(); } });
-};
-ACT["split-add"] = () => {
-  choiceSheet("Add to your split", routinesOf("workout").map((r) => [r.id, r.name, `${kindNoun("workout", r.slots.length)}${S.plan.split.some((x) => x.routineId === r.id) ? ", already in it" : ""}`, "workout"]), (id) => {
-    S.plan.split.push({ routineId: id }); savePlan(); render();
+// ---------- Active and inactive workouts ----------
+const inSplit = (id) => S.plan.split.some((x) => x.routineId === id);
+function workoutOrder() {
+  const act = S.plan.split.map((x) => x.routineId).filter((id) => { const r = rtById(id); return r && r.kind === "workout"; });
+  const ina = routinesOf("workout").filter((r) => !act.includes(r.id)).map((r) => r.id);
+  return { act, ina };
+}
+// Set the split (active, in order) and the inactive list. What's next then follows the new order and your log.
+function setWorkoutOrder(act, ina, movedId, o) {
+  const before = workoutOrder();
+  if (before.act.join("|") === act.join("|") && before.ina.join("|") === ina.join("|")) return false;
+  const prev = { split: clone(S.plan.split), ov: S.plan.splitOverride ? clone(S.plan.splitOverride) : null, routines: S.plan.routines.slice() };
+  const was = splitInfo().routineId;
+  const order = act.concat(ina), pos = (r) => { const i = order.indexOf(r.id); return i < 0 ? order.length : i; };
+  S.plan.routines = routinesOf("workout").sort((a, b) => pos(a) - pos(b)).concat(S.plan.routines.filter((r) => r.kind !== "workout"));
+  const splitChanged = before.act.join("|") !== act.join("|");
+  if (splitChanged) { S.plan.split = act.map((id) => ({ routineId: id })); S.plan.splitOverride = null; }
+  savePlan(); render();
+  const r = rtById(movedId), on = act.includes(movedId), wasOn = before.act.includes(movedId), now = splitInfo().routineId;
+  const nextNote = splitChanged && now && now !== was && act.length > 1 ? ` ${rtById(now).name} is up next.` : "";
+  let msg = "";
+  if (r && wasOn && !on) msg = `${r.name} is inactive. Its exercises still progress.${nextNote}`;
+  else if (r && !wasOn && on) msg = `${r.name} is in your split.${nextNote}`;
+  else if (splitChanged) msg = act.length ? `Split: ${act.map((id) => rtById(id).name).join(", ")}.${nextNote}` : "";
+  if (msg) toast(msg, { label: "Undo", run: () => { S.plan.split = prev.split; S.plan.splitOverride = prev.ov; S.plan.routines = prev.routines; savePlan(); render(); } });
+  if (o && o.focus) { const g = $(`[data-grip="${qid(movedId)}"]`); if (g) g.focus(); }
+  return true;
+}
+// One place up or down through Active then Inactive (moving past the end of Active makes it inactive, and back)
+function moveWorkout(id, d) {
+  const { act, ina } = workoutOrder();
+  const seq = act.concat(["|"], ina), i = seq.indexOf(id), j = i + d;
+  if (i < 0 || j < 0 || j >= seq.length) return;
+  [seq[i], seq[j]] = [seq[j], seq[i]];
+  const cut = seq.indexOf("|");
+  setWorkoutOrder(seq.slice(0, cut), seq.slice(cut + 1), id, { focus: true });
+}
+document.addEventListener("keydown", (e) => {
+  const g = e.target && e.target.closest && e.target.closest("[data-grip]");
+  if (!g || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+  e.preventDefault();
+  moveWorkout(g.dataset.grip, e.key === "ArrowUp" ? -1 : 1);
+});
+
+// Drag by the dots: the row lifts and follows the finger, a gap shows where it lands. The page scrolls near the edges.
+let drag = null;
+document.addEventListener("pointerdown", (e) => {
+  const g = e.target && e.target.closest && e.target.closest("[data-grip]");
+  if (!g || drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+  const row = g.closest(".rotrow");
+  if (!row) return;
+  e.preventDefault();
+  drag = { pid: e.pointerId, row, id: row.dataset.rt, y0: e.clientY, y: e.clientY, lifted: false, raf: 0 };
+  try { g.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
+  drag.raf = requestAnimationFrame(dragTick);
+});
+window.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  drag.y = e.clientY;
+  if (!drag.lifted) { if (Math.abs(drag.y - drag.y0) < 6) return; liftRow(); }
+  placeRow();
+});
+window.addEventListener("pointerup", (e) => { if (drag && e.pointerId === drag.pid) endDrag(true); });
+window.addEventListener("pointercancel", (e) => { if (drag && e.pointerId === drag.pid) endDrag(false); });
+function liftRow() {
+  const d = drag, r = d.row.getBoundingClientRect();
+  d.ph = document.createElement("li");
+  d.ph.className = "rot-ph";
+  d.ph.style.height = `${r.height}px`;
+  d.row.parentNode.insertBefore(d.ph, d.row);
+  d.off = d.y0 - r.top;
+  Object.assign(d.row.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px` });
+  d.row.classList.add("lifted");
+  d.lifted = true;
+  document.documentElement.classList.add("dragging");
+}
+function placeRow() {
+  const d = drag;
+  d.row.style.top = `${d.y - d.off}px`;
+  let list = null, best = Infinity;
+  for (const l of $$(".rotlist")) {
+    const r = l.getBoundingClientRect(), dist = d.y < r.top ? r.top - d.y : d.y > r.bottom ? d.y - r.bottom : 0;
+    if (dist < best) { best = dist; list = l; }
+  }
+  if (!list) return;
+  let ref = $(":scope > .rot-empty", list);
+  for (const el of $$(":scope > .rotrow:not(.lifted)", list)) {
+    const r = el.getBoundingClientRect();
+    if (d.y < r.top + r.height / 2) { ref = el; break; }
+  }
+  if (d.ph.parentNode !== list || d.ph.nextElementSibling !== ref) list.insertBefore(d.ph, ref);
+  d.row.classList.toggle("to-inactive", list.dataset.zone === "inactive");
+  for (const l of $$(".rotlist")) l.classList.toggle("is-empty", !$(":scope > .rotrow:not(.lifted), :scope > .rot-ph", l));
+  let n = 0;
+  const actList = $('.rotlist[data-zone="active"]');
+  for (const el of actList ? Array.from(actList.children) : []) {
+    const target = el === d.ph ? d.row : el.classList.contains("rotrow") && !el.classList.contains("lifted") ? el : null;
+    if (target) { n++; const s = $(".rot-n", target); if (s) s.textContent = n; }
+  }
+}
+function dragTick() {
+  if (!drag) return;
+  if (drag.lifted) {
+    const tb = $("#tabbar"), bottom = tb ? tb.getBoundingClientRect().top : window.innerHeight, edge = 70;
+    let dy = 0;
+    if (drag.y < edge) dy = -Math.min(18, Math.ceil((edge - drag.y) / 4));
+    else if (drag.y > bottom - edge) dy = Math.min(18, Math.ceil((drag.y - (bottom - edge)) / 4));
+    if (dy) { const y0 = window.scrollY; window.scrollBy(0, dy); if (window.scrollY !== y0) placeRow(); }
+  }
+  drag.raf = requestAnimationFrame(dragTick);
+}
+function endDrag(commit) {
+  const d = drag;
+  drag = null;
+  cancelAnimationFrame(d.raf);
+  if (!d.lifted) return;
+  document.documentElement.classList.remove("dragging");
+  if (commit && d.ph.parentNode) d.ph.parentNode.insertBefore(d.row, d.ph);
+  d.ph.remove();
+  d.row.classList.remove("lifted", "to-inactive");
+  d.row.removeAttribute("style");
+  if (!commit || !document.contains(d.row)) return render();
+  const ids = (z) => $$(`.rotlist[data-zone="${z}"] > .rotrow`).map((r) => r.dataset.rt);
+  if (!setWorkoutOrder(ids("active"), ids("inactive"), d.id)) render();
+}
+
+ACT["rt-menu"] = (el) => {
+  const rt = rtById(el.dataset.rt);
+  if (!rt) return;
+  const { act, ina } = workoutOrder(), i = act.indexOf(rt.id), info = splitInfo();
+  const opts = [["start", `Start ${rt.name}`, i < 0 ? "It won't move your split" : ""]];
+  if (i >= 0 && act.length > 1 && info.next !== i) opts.push(["next", "Make it next", ""]);
+  if (i > 0) opts.push(["up", "Move up", ""]);
+  if (i >= 0 && i < act.length - 1) opts.push(["down", "Move down", ""]);
+  opts.push(i >= 0 ? ["off", "Make inactive", "It stops rotating. Its exercises still progress."] : ["on", "Make active", "It joins the end of your split"]);
+  opts.push(["edit", `Edit ${rt.name}`, ""]);
+  choiceSheet(rt.name, opts, (k) => {
+    if (k === "start") startSession(rt.id, S.today);
+    else if (k === "next") { S.plan.splitOverride = { pos: i, date: S.today, at: nowISO() }; savePlan(); render(); toast(`${rt.name} is up next`); }
+    else if (k === "up" || k === "down") moveWorkout(rt.id, k === "up" ? -1 : 1);
+    else if (k === "off") setWorkoutOrder(act.filter((x) => x !== rt.id), [rt.id].concat(ina), rt.id);
+    else if (k === "on") setWorkoutOrder(act.concat([rt.id]), ina.filter((x) => x !== rt.id), rt.id);
+    else if (k === "edit") editRoutine(rt.id);
   });
 };
 ACT["new-routine"] = (el) => newRoutine(el.dataset.kind || "workout");
 ACT["edit-routine"] = (el) => editRoutine(el.dataset.rt);
+ACT["new-model"] = () => editModel(null);
+ACT["edit-model"] = (el) => editModel(el.dataset.id);
 ACT.starter = () => openStarter();
 ACT.exercises = () => openExercises();
 
 function newRoutine(kind) {
   const sh = openSheet({ title: KIND_NEW[kind], focus: true });
-  const ph = kind === "workout" ? "Push, Upper A, Legs…" : kind === "physio" ? "Knee rehab" : "Evening stretch";
+  const ph = kind === "workout" ? "Back, Chest, Upper…" : kind === "physio" ? "Knee rehab" : "Evening stretch";
+  const wk = kind === "workout";
   sh.body.innerHTML = field("Name", `<input id="nr-name" maxlength="60" autocomplete="off" placeholder="${ph}">`) +
-    (kind === "workout" ? `<label class="check"><input type="checkbox" id="nr-split" checked><span>Add it to the end of my split</span></label>` : "") + `<p class="form-err" id="nr-err" role="alert" hidden></p>`;
+    (wk ? `<div class="field"><span class="field-l">Family</span>${chips("nr-fam", FAMILY_CHOICES, E.DEFAULT_FAMILY)}<span class="field-h">Exercises progress together across workouts of the same family.</span></div>
+      <label class="check"><input type="checkbox" id="nr-split"${S.plan.split.length ? "" : " checked"}><span>Add it to my active split</span></label>` : "") + `<p class="form-err" id="nr-err" role="alert" hidden></p>`;
+  if (wk) wireChips(sh.body, "nr-fam", () => {});
   sh.setFoot(`<button class="btn red block" id="nr-go">Create</button>`);
   const inp = $("#nr-name", sh.body);
   setTimeout(() => inp.focus(), 60);
   const go = () => {
     const name = inp.value.trim();
     if (!name) { const e = $("#nr-err", sh.body); e.textContent = "Give it a name."; e.hidden = false; return; }
-    const rt = { id: uid("rt"), name: name.slice(0, 60), kind, slots: [] };
+    const rt = { id: uid("rt"), name: name.slice(0, 60), kind, family: wk ? chipValue(sh.body, "nr-fam") || E.DEFAULT_FAMILY : null, slots: [] };
     S.plan.routines.push(rt);
-    if (kind === "workout" && $("#nr-split", sh.body).checked) S.plan.split.push({ routineId: rt.id });
+    if (wk && $("#nr-split", sh.body).checked) S.plan.split.push({ routineId: rt.id });
     savePlan(); sh.close(true); render();
     editRoutine(rt.id);
   };
@@ -2329,10 +2813,12 @@ function openStarter() {
       if (!r) return;
       S.plan.exercises.push(...r.exercises);
       S.plan.routines.push(...r.routines);
-      S.plan.split.push(...r.split);
-      S.plan.splitOverride = null;
+      for (const [k, v] of Object.entries(r.setups)) if (!S.plan.setups[k]) S.plan.setups[k] = v;
+      const active = !S.plan.split.length;
+      if (active) { S.plan.split.push(...r.split); S.plan.splitOverride = null; }
       savePlan(); sh.close(true); render();
-      toast(`${E.TEMPLATES.find((t) => t.key === b.dataset.k).name} is set up`);
+      const name = E.TEMPLATES.find((t) => t.key === b.dataset.k).name;
+      toast(active ? `${name} is set up` : `${name} is set up under Inactive`);
     };
   });
 }
@@ -2346,21 +2832,31 @@ function editRoutine(id) {
   function draw() {
     if (!rtById(id)) return sh.close(true);
     sh.setTitle(rt.name);
-    const inSplit = S.plan.split.some((x) => x.routineId === rt.id);
+    const fam = famOf(rt), wk = rt.kind === "workout";
     sh.body.innerHTML = `${field("Name", `<input id="re-name" maxlength="60" autocomplete="off" value="${esc(rt.name)}">`)}
+      ${wk ? `<div class="field"><span class="field-l">Family</span>${chips("re-fam", FAMILY_CHOICES, fam)}<span class="field-h">Its exercises progress together with your other ${esc(famLabel(fam))} workouts.</span></div>
+        <label class="check"><input type="checkbox" id="re-active"${inSplit(rt.id) ? " checked" : ""}><span>In my active split</span></label>` : ""}
       <div class="block-head"><h3 class="h3">${rt.kind === "stretch" ? "Stretches" : "Exercises"}</h3><span class="muted">${rt.slots.length}</span></div>
       ${rt.slots.length ? `<ol class="slotlist">${rt.slots.map((slot, i) => slotRow(rt, slot, i)).join("")}</ol>` : `<p class="empty">No ${noun === "stretch" ? "stretches" : "exercises"} yet.</p>`}
       <button class="btn ghost block" data-x="add">${ICON.plus}Add ${noun === "stretch" ? "a stretch" : "an exercise"}</button>
       ${rt.kind !== "stretch" && rt.slots.length > 1 ? `<button class="btn ghost block" data-x="prog-all">Change when everything goes up</button>` : ""}
-      ${rt.kind === "workout" ? `<p class="muted small">${inSplit ? "In your split." : "Not in your split. Add it from Plan."}</p>` : ""}
       <button class="btn ghost danger-text block" data-x="delete">${ICON.trash}Delete ${esc(rt.name)}</button>`;
     const nm = $("#re-name", sh.body);
     nm.onchange = () => { const v = nm.value.trim(); if (v && v !== rt.name) { rt.name = v.slice(0, 60); savePlan(); sh.setTitle(rt.name); if (S.draft && S.draft.routineId === rt.id) { S.draft.title = rt.name; saveDraftSoon(); } } else nm.value = rt.name; };
     nm.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); nm.blur(); } };
+    if (wk) {
+      wireChips(sh.body, "re-fam", (v) => { if (v && v !== fam) setFamily(rt, v); draw(); });
+      const ac = $("#re-active", sh.body);
+      ac.onchange = () => {
+        const { act, ina } = workoutOrder();
+        if (ac.checked) setWorkoutOrder(act.concat([rt.id]), ina.filter((x) => x !== rt.id), rt.id);
+        else setWorkoutOrder(act.filter((x) => x !== rt.id), [rt.id].concat(ina.filter((x) => x !== rt.id)), rt.id);
+      };
+    }
     $$("[data-x]", sh.body).forEach((b) => {
       b.onclick = () => {
         const x = b.dataset.x, i = Number(b.dataset.i);
-        if (x === "slot") editSlot(rt, rt.slots[i].id, draw);
+        if (x === "slot") editSetup(rt, rt.slots[i].id, draw);
         else if (x === "up" || x === "down") {
           const j = x === "up" ? i - 1 : i + 1;
           if (j < 0 || j >= rt.slots.length) return;
@@ -2369,10 +2865,10 @@ function editRoutine(id) {
           const f = $(`[data-x="${x}"][data-i="${j}"]`, sh.body); if (f && !f.disabled) f.focus();
         } else if (x === "add") {
           pickExercise({ title: noun === "stretch" ? "Add a stretch" : "Add an exercise", kind: rt.kind }, (ex) => {
-            const slot = E.newSlot(ex.id, slotDefaults(ex, rt.kind), S.settings);
-            if (rt.kind === "physio") slot.prog.when = "manual";
+            const slot = E.newSlot(ex.id);
+            ensureSetup(ex.id, famOf(rt));
             rt.slots.push(slot); savePlan(); draw();
-            editSlot(rt, slot.id, draw);
+            editSetup(rt, slot.id, draw);
           });
         } else if (x === "prog-all") progressAll(rt, draw);
         else if (x === "delete") deleteRoutine(rt, sh);
@@ -2384,34 +2880,50 @@ function editRoutine(id) {
   $("#re-start", sh.foot).onclick = () => { if (!rt.slots.length) return toast(`Add ${noun === "stretch" ? "stretches" : "exercises"} first.`); sh.close(true); startSession(rt.id, S.today); };
   draw();
 }
+// A workout moves to another family: its exercises use their setups there (made from this family's, without the weights)
+function setFamily(rt, fam) {
+  const old = famOf(rt);
+  rt.family = fam;
+  for (const sl of rt.slots) if (!setupFor(sl.exId, fam)) ensureSetup(sl.exId, fam, setupFor(sl.exId, old));
+  savePlan();
+  toast(`${rt.name} is ${E.FAMILY_LABEL[fam]} now. Its exercises follow your ${E.FAMILY_LABEL[fam]} progress.`);
+}
 function slotRow(rt, slot, i) {
-  const ex = exById(slot.exId);
-  const t = targetFor(slot, ex, S.today, { fallback: true });
+  const ex = exById(slot.exId), fam = famOf(rt);
+  const setup = setupOrDefault(ex.id, fam);
+  const t = targetFor(setup, ex, S.today, fam, { fallback: true });
+  const m = setup.prog && setup.prog.model ? modelById(setup.prog.model) : null;
   const nm = esc(ex.name);
-  const next = ex.type === "weights" ? (t.load !== null ? `${E.fmtNum(t.load)} lb next` : "No weight yet") : "";
-  const prog = rt.kind === "stretch" && t.how === "none" ? "" : E.progLabel(slot.prog, ex, S.settings);
-  return `<li class="slot"><button class="slot-main" data-x="slot" data-i="${i}"><strong>${nm}</strong><span>${esc(E.prescription(t, ex.side))}${next ? `, ${esc(next)}` : ""}</span>${prog ? `<span class="slot-prog">${esc(prog)}</span>` : ""}</button>
+  const what = ex.type === "check" ? "Tick it off" : `${E.prescription(t, ex.side)}${t.how === "steps" && t.stepCount > 1 ? `, step ${t.step + 1} of ${t.stepCount}` : ""}`;
+  const next = ex.type === "weights" ? (t.plateUp ? "next plate" : t.load !== null ? `${E.fmtNum(t.load)} lb next` : "No weight yet") : "";
+  const prog = ex.type === "check" ? "" : m ? m.name : rt.kind === "stretch" && t.how === "none" ? "" : E.progLabel(resolved(setup).prog, ex, S.settings);
+  return `<li class="slot"><button class="slot-main" data-x="slot" data-i="${i}"><strong>${nm}</strong><span>${esc(what)}${next ? `, ${esc(next)}` : ""}</span>${prog ? `<span class="slot-prog">${esc(prog)}</span>` : ""}</button>
     <span class="slot-move"><button class="icon-btn sm" data-x="up" data-i="${i}" aria-label="Move ${nm} up"${i === 0 ? " disabled" : ""}>${ICON.up}</button><button class="icon-btn sm" data-x="down" data-i="${i}" aria-label="Move ${nm} down"${i === rt.slots.length - 1 ? " disabled" : ""}>${ICON.down}</button></span></li>`;
 }
-// One cadence for every exercise in a routine (exercises that don't progress are left alone)
+// One cadence for every exercise in a routine (exercises on a model, freestyle or not progressing are left alone)
 function progressAll(rt, onDone) {
+  const fam = famOf(rt);
   choiceSheet(`When should ${rt.name} go up?`, E.WHEN_OPTIONS.map(([k, l]) => [k, l, k.startsWith("range") ? "Weighted exercises only" : ""]), (k) => {
     const [when, n] = k.split("-");
-    let changed = 0;
+    let changed = 0, onModel = 0;
     for (const slot of rt.slots) {
       const ex = exById(slot.exId);
-      const np = E.normProg(slot.prog, ex && ex.type);
-      if (np.how === "none" || (when === "range" && !(np.how === "load" || (np.how === "steps" && ex && ex.type !== "timed")))) continue;
-      slot.prog.when = when; slot.prog.every = Number(n) || 1; changed++;
+      if (!ex || ex.type === "check") continue;
+      const st = ensureSetup(ex.id, fam);
+      if (st.prog && st.prog.model && modelById(st.prog.model)) { onModel++; continue; }
+      const np = E.normProg(st.prog, ex.type);
+      if (np.how === "none" || np.how === "free" || (when === "range" && !(np.how === "load" || (np.how === "steps" && ex.type !== "timed")))) continue;
+      st.prog = Object.assign({}, st.prog, { when, every: Number(n) || 1 }); changed++;
     }
     savePlan(); onDone();
     const label = E.WHEN_OPTIONS.find((o) => o[0] === k)[1];
-    toast(changed ? `${plural(changed, "exercise")} in ${rt.name}: ${label.charAt(0).toLowerCase() + label.slice(1)}` : "Nothing changed");
+    const tail = onModel ? ` ${plural(onModel, "exercise")} on a model ${onModel === 1 ? "follows its" : "follow their"} model.` : "";
+    toast(changed ? `${plural(changed, "exercise")} in ${rt.name}: ${label.charAt(0).toLowerCase() + label.slice(1)}.${tail}` : onModel ? tail.trim() : "Nothing changed");
   });
 }
 async function deleteRoutine(rt, sh) {
   if (!(await confirmBox({ title: `Delete ${rt.name}?`, body: "Sessions you've logged stay in your history and calendar.", ok: "Delete", danger: true }))) return;
-  const before = { routines: clone(S.plan.routines), split: clone(S.plan.split), ov: S.plan.splitOverride };
+  const before = { routines: S.plan.routines.slice(), split: clone(S.plan.split), ov: S.plan.splitOverride };
   S.plan.routines = S.plan.routines.filter((r) => r.id !== rt.id);
   S.plan.split = S.plan.split.filter((x) => x.routineId !== rt.id);
   S.plan.splitOverride = null;
@@ -2419,41 +2931,83 @@ async function deleteRoutine(rt, sh) {
   toast(`${rt.name} deleted`, { label: "Undo", run: () => { S.plan.routines = before.routines; S.plan.split = before.split; S.plan.splitOverride = before.ov; savePlan(); render(); } });
 }
 
-// ---------- One exercise in a routine: amounts and progression ----------
-const HOW_CHOICES = {
-  weights: [["load", "Add weight"], ["reps", "Add reps"], ["steps", "Custom steps"], ["none", "Don't progress"]],
-  bodyweight: [["reps", "Add reps"], ["steps", "Custom steps"], ["none", "Don't progress"]],
-  timed: [["time", "Add time"], ["steps", "Custom steps"], ["none", "Don't progress"]]
-};
-const KIND_CHOICES = [["free", "Free weight"], ["machine", "Machine"], ["bodyweight", "Bodyweight"], ["timed", "Timed hold"]];
-const kindOf = (type, equip) => (type === "weights" ? (equip === "machine" ? "machine" : "free") : type);
+// ---------- Custom steps (an exercise's own, or a model's) ----------
+function stepsHtml(steps, o) {
+  return `<ol class="steps">${steps.map((st, k) => `<li class="steprow" data-k="${k}"><span class="step-n">${k + 1}</span>
+      <input data-st="sets" inputmode="numeric" pattern="[0-9]*" value="${st.sets}" aria-label="Step ${k + 1} sets"><span class="x">×</span>
+      ${o.timed ? `<span class="unit-in sm"><input data-st="secs" inputmode="numeric" pattern="[0-9]*" value="${esc(st.secs === null ? "" : st.secs)}" aria-label="Step ${k + 1} seconds"><span>s</span></span>`
+        : `<span class="range-in sm"><input data-st="rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.min : "")}" aria-label="Step ${k + 1} reps, or the bottom of a range"><span>to</span><input data-st="rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps && st.reps.max !== st.reps.min ? st.reps.max : "")}" placeholder="—" aria-label="Step ${k + 1} top of the rep range (optional)"></span>`}
+      ${o.load ? `<span class="unit-in sm"><input data-st="load" inputmode="decimal" value="${esc(st.load === null || st.load === undefined ? "" : E.fmtNum(st.load))}" placeholder="—" aria-label="Step ${k + 1} weight"><span>lb</span></span>` : ""}
+      <button type="button" class="icon-btn sm" data-w="step-del" data-k="${k}" aria-label="Remove step ${k + 1}"${steps.length < 2 ? " disabled" : ""}>${ICON.x}</button></li>`).join("")}</ol>
+    <button type="button" class="link" data-w="step-add">${ICON.plus}Add a step</button>`;
+}
+function readSteps(root, steps) {
+  $$(".steprow", root).forEach((row) => {
+    const st = steps[Number(row.dataset.k)];
+    if (!st) return;
+    const g = (k) => { const e = $(`[data-st="${k}"]`, row); return e ? E.num(e.value) : undefined; };
+    if (g("sets") !== undefined && g("sets") !== null) st.sets = E.clampSets(g("sets"));
+    if (g("secs") !== undefined) st.secs = g("secs");
+    if (g("rmin") !== undefined) { const lo = g("rmin"), hi = g("rmax"); st.reps = E.normReps({ min: lo, max: hi === null || hi === undefined ? lo : hi }); }
+    if (g("load") !== undefined) st.load = g("load");
+  });
+}
+const stepText = (st, timed, withLoad) => `${st.sets} × ${timed ? E.fmtSecs(st.secs) : E.fmtReps(st.reps)}${withLoad && st.load !== null && st.load !== undefined ? ` at ${E.fmtNum(st.load)} lb` : ""}`;
 
-function editSlot(rt, slotId, onDone) {
+// ---------- One exercise in a routine: how it's done in this family and how it progresses ----------
+function editSetup(rt, slotId, onDone) {
   const slot = rt.slots.find((x) => x.id === slotId);
   const ex = slot && exById(slot.exId);
   if (!ex) return;
-  const t0 = targetFor(slot, ex, S.today, { fallback: true });
-  const p0 = E.normProg(slot.prog, ex.type);
+  const fam = famOf(rt), key = E.setupKey(ex.id, fam);
+  const setup = ensureSetup(ex.id, fam);
+  const t0 = targetFor(setup, ex, S.today, fam, { fallback: true });
+  const p0 = E.normProg(setup.prog, ex.type);                  // its own progression (it may point to a model)
+  const m0 = p0.model ? modelById(p0.model) : null;
+  const rp = E.normProg(resolved(setup).prog, ex.type);        // what runs, with a model's steps filled in
+  const fresh = !t0.last;                                       // not done in this family yet
   const w = {
-    name: ex.name, kind: kindOf(ex.type, ex.equip), side: ex.side, note: slot.note || "",
-    sets: t0.how === "steps" ? E.clampSets(slot.sets) : t0.sets, rmin: (t0.reps || slot.reps || { min: 8 }).min, rmax: (t0.reps || slot.reps || { max: 12 }).max,
-    secs: t0.secs !== null ? t0.secs : (slot.secs !== null ? slot.secs : 30), load: t0.load,
-    how: p0.how, when: p0.when, every: p0.every, by: slot.prog.by, hold: p0.hold, steps: clone(p0.steps), step: t0.step, loop: p0.loop, plate: p0.plate
+    name: ex.name, kind: kindOf(ex), side: ex.side, note: slot.note || "",
+    mode: m0 ? "model" : "own", model: m0 ? m0.id : null,
+    sets: t0.sets, rmin: (t0.reps || setup.reps || { min: 8 }).min, rmax: (t0.reps || setup.reps || { max: 12 }).max,
+    secs: t0.secs !== null ? t0.secs : setup.secs !== null ? setup.secs : 30, load: t0.load,
+    how: rp.how, when: rp.when, every: rp.every, hold: rp.hold, steps: clone(rp.steps), loop: rp.loop, by: p0.by, plate: p0.plate, step: t0.step
   };
-  if (t0.how === "steps" && t0.reps) { w.rmin = slot.reps ? slot.reps.min : w.rmin; w.rmax = slot.reps ? slot.reps.max : w.rmax; }
+  if (rp.how === "steps") {
+    w.sets = E.clampSets(setup.sets);
+    const r = E.normReps(setup.reps); if (r) { w.rmin = r.min; w.rmax = r.max; }
+    if (E.num(setup.secs) !== null) w.secs = E.num(setup.secs);
+  }
   const sh = openSheet({ title: ex.name, tall: true });
-  const typeOf = () => (w.kind === "free" || w.kind === "machine" ? "weights" : w.kind);
-  const loopOn = () => w.how === "steps" && w.loop && typeOf() === "weights";
-  const plateOn = () => E.plateMode({ how: w.how, loop: loopOn(), plate: w.plate, by: w.by }, { type: typeOf(), equip: w.kind === "machine" ? "machine" : "free" }, S.settings);
-  const unit = () => (w.how === "load" || loopOn() ? "lb" : w.how === "reps" ? "reps" : "s");
-  function defaultBy() { return w.how === "load" || loopOn() ? (w.kind === "machine" ? S.settings.inc.machine : S.settings.inc.free) : w.how === "reps" ? 1 : 5; }
+  const typeOf = () => typeOfKind(w.kind);
+  const fitting = () => S.plan.models.filter((m) => modelFits(m, typeOf()));
+  const curModel = () => (w.mode === "model" ? modelById(w.model) : null);
+  const loopOn = () => typeOf() === "weights" && (w.mode === "model" ? !!(curModel() && curModel().loop) : w.how === "steps" && w.loop);
+  const effBy = () => w.by || (curModel() ? curModel().by : null);
+  const effPlate = () => (w.plate === true || w.plate === false ? w.plate : curModel() ? curModel().plate : null);
+  const equipNow = () => ({ type: typeOf(), equip: w.kind === "machine" ? "machine" : "free" });
+  const plateOn = () => E.plateMode({ how: w.mode === "model" ? "steps" : w.how, loop: loopOn(), plate: effPlate(), by: effBy() }, equipNow(), S.settings);
+  const settingsBy = () => (w.kind === "machine" ? S.settings.inc.machine : S.settings.inc.free);
+  function defaultBy() { return w.how === "load" || loopOn() ? (curModel() && curModel().by) || settingsBy() : w.how === "reps" ? 1 : 5; }
+  function setModel(id) {
+    const m = modelById(id);
+    if (!m) return;
+    w.model = id;
+    if (id === p0.model) { w.step = t0.step; return; }
+    // Done before: carry on at the same reps if the new model has them. Never done: start at the bottom.
+    const st = E.modelSteps(m), at = t0.reps ? t0.reps.min : w.rmin, k = fresh ? -1 : st.findIndex((s) => s.reps && s.reps.min === at);
+    w.step = k >= 0 ? k : 0;
+  }
   function fixHow() {
-    const ok = HOW_CHOICES[typeOf()].map((x) => x[0]);
-    if (!ok.includes(w.how)) w.how = E.defaultHow(typeOf());
-    if (w.when === "range" && !(w.how === "load" || (w.how === "steps" && typeOf() !== "timed"))) w.when = "weeks";
+    const type = typeOf();
+    if (type === "check") return;
+    if (w.mode === "model") { if (modelFits(curModel(), type)) return; w.mode = "own"; }
+    const ok = HOW_CHOICES[type].map((x) => x[0]);
+    if (!ok.includes(w.how)) w.how = E.defaultHow(type);
+    if (w.when === "range" && !(w.how === "load" || (w.how === "steps" && type !== "timed"))) w.when = "weeks";
     if (w.how === "steps" && !w.steps.length) {
-      const timed = typeOf() === "timed", lo = Math.round(w.rmin || 8), hi = Math.round(w.rmax || lo);
-      if (typeOf() === "weights" && hi > lo && hi - lo <= 7) {
+      const timed = type === "timed", lo = Math.round(w.rmin || 8), hi = Math.round(w.rmax || lo);
+      if (type === "weights" && hi > lo && hi - lo <= 7) {
         // A rep range becomes a ladder: 6, 7, 8 reps, then more weight and back to 6
         w.steps = [];
         for (let r = lo; r <= hi; r++) w.steps.push({ sets: w.sets, reps: { min: r, max: r }, secs: null, load: null });
@@ -2462,50 +3016,93 @@ function editSlot(rt, slotId, onDone) {
       w.step = 0;
     }
   }
-  function stepText(st) { return `${st.sets} × ${typeOf() === "timed" ? E.fmtSecs(st.secs) : E.fmtReps(st.reps)}${st.load !== null && st.load !== undefined && typeOf() === "weights" && !loopOn() ? ` at ${E.fmtNum(st.load)} lb` : ""}`; }
+  function incHtml(label) {
+    const dflt = curModel() && curModel().by ? `the model's ${E.fmtNum(curModel().by)} lb` : `your ${w.kind === "machine" ? "machine" : "free-weight"} default (${E.fmtNum(settingsBy())} lb, in Settings)`;
+    return `<div class="field"><span class="field-l">${label}</span>${chips("inc", [["amount", "An amount"], ["plate", "Next plate"]], plateOn() ? "plate" : "amount")}</div>
+      ${plateOn() ? `<p class="muted small">When it's time to go up, it says Next plate. Type the new weight in that session and it goes on from there.</p>`
+        : field("Amount", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>lb</span></span>`, `Leave it blank to use ${dflt}.`)}`;
+  }
   function draw() {
     fixHow();
-    const type = typeOf(), timed = type === "timed";
-    const whenOpts = E.WHEN_OPTIONS.filter(([k]) => !(k.startsWith("range") && !(w.how === "load" || (w.how === "steps" && !timed))));
-    const whenKey = `${w.when}-${w.when === "weeks" || w.when === "sessions" ? w.every : 1}`;
-    const amounts = w.how === "steps" ? "" : `<div class="amounts">
+    const type = typeOf(), timed = type === "timed", check = type === "check", own = w.mode === "own", m = curModel();
+    const usesSteps = !check && (!own || w.how === "steps");
+    const stepList = own ? w.steps : E.modelSteps(m);
+    const unit = w.how === "load" || loopOn() ? "lb" : w.how === "reps" ? "reps" : "s";
+    const others = S.plan.routines.filter((r) => r.id !== rt.id && famOf(r) === fam && r.slots.some((s) => s.exId === ex.id)).map((r) => r.name);
+    const shared = others.length ? `Also in ${listJoin(others)}. Changes here and its progress carry over.` : rt.kind === "workout" ? `Its progress carries over to any ${famLabel(fam)} workout you add it to.` : "";
+    let prog = "";
+    if (!check) {
+      const ms = fitting();
+      const modeChips = ms.length ? chips("mode", [["model", "Use a model"], ["own", "Set it up myself"]], w.mode) : "";
+      if (!own) {
+        prog = `${modeChips}${field("Model", `<select id="se-model">${ms.map((x) => `<option value="${esc(x.id)}"${x.id === w.model ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select>`, E.modelSummary(m))}
+          <div class="row-btns"><button type="button" class="btn ghost sm" data-w="model-edit">${ICON.pencil}Edit model</button><button type="button" class="btn ghost sm" data-w="model-new">${ICON.plus}New model</button></div>
+          ${loopOn() ? incHtml("Weight added after the top step") : ""}`;
+      } else {
+        const whenOpts = E.WHEN_OPTIONS.filter(([k]) => !(k.startsWith("range") && !(w.how === "load" || (w.how === "steps" && !timed))));
+        const whenKey = `${w.when}-${w.when === "weeks" || w.when === "sessions" ? w.every : 1}`;
+        prog = `${modeChips}<div class="field"><span class="field-l">How it goes up</span>${chips("how", HOW_CHOICES[type], w.how)}</div>
+          ${w.how === "steps" ? `<div class="field"><span class="field-l">Steps</span>${timed ? "" : `<span class="field-h">Sets × reps. Fill in the second reps box for a range, like 8 to 12.</span>`}${stepsHtml(w.steps, { timed, load: type === "weights" && !loopOn() })}</div>
+            ${type === "weights" ? `<div class="field"><span class="field-l">After the last step</span>${chips("loop", [["stay", "Stay there"], ["loop", "Add weight, start over"]], w.loop ? "loop" : "stay")}</div>` : ""}` : ""}
+          ${w.how === "free" ? `<p class="muted small">Nothing goes up on its own. In your workout, tap Next time to set what loads next time, or Change today to change this one.</p>` : ""}
+          ${w.how === "none" || w.how === "free" ? "" : field("When", `<select id="se-when">${whenOpts.map(([k, l]) => `<option value="${k}"${k === whenKey ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
+          ${w.how === "load" || loopOn() ? incHtml(loopOn() ? "Weight added after the last step" : "Each time, add")
+            : ["reps", "time"].includes(w.how) ? field("Each time, add", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>${unit}</span></span>`) : ""}
+          ${w.how === "none" || w.how === "free" || w.when === "manual" ? "" : `<label class="check"><input type="checkbox" id="se-hold"${w.hold ? " checked" : ""}><span>${timed ? "Hold if I cut a set short" : "Hold if I miss reps"}</span></label>`}
+          ${w.when === "manual" && !["none", "free"].includes(w.how) ? `<p class="muted small">In a session, set Next time to Go up when you're ready.</p>` : ""}`;
+      }
+    }
+    const loadLabel = t0.plateUp ? "Weight now" : fresh ? "Starting weight" : "Weight next time";
+    const loadHint = t0.plateUp ? "Next session goes up one plate from this. If you know the new weight, type it here instead." : fresh ? "Leave it empty to set it in your first workout." : usesSteps && own && !loopOn() ? "Used by any step without its own weight." : "";
+    const load = type === "weights" ? field(loadLabel, `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="${fresh ? "Set in workout" : "Not set"}"><span>lb</span></span>`, loadHint) : "";
+    let amounts = "";
+    if (!check && usesSteps) amounts = `<h3 class="h3 sec">Next session</h3>${field("Step", `<select id="se-step">${stepList.map((st, k) => `<option value="${k}"${k === w.step ? " selected" : ""}>Step ${k + 1}: ${esc(stepText(st, timed, type === "weights" && own && !loopOn()))}</option>`).join("")}</select>`)}${load}`;
+    else if (!check) {
+      amounts = `<h3 class="h3 sec">${timed ? "Sets and time" : "Sets and reps"}</h3><div class="amounts">
         ${field("Sets", `<span class="stepper"><button type="button" class="icon-btn sm" data-w="sets-" aria-label="One less set">${ICON.minus}</button><input id="se-sets" inputmode="numeric" pattern="[0-9]*" value="${w.sets}" aria-label="Sets"><button type="button" class="icon-btn sm" data-w="sets+" aria-label="One more set">${ICON.plus}</button></span>`)}
         ${timed ? field("Seconds", `<span class="unit-in"><input id="se-secs" inputmode="numeric" pattern="[0-9]*" value="${esc(w.secs)}"><span>s</span></span>`)
           : `<div class="field"><span class="field-l">Reps</span><span class="range-in"><input id="se-rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmin)}" aria-label="Fewest reps"><span>to</span><input id="se-rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(w.rmax)}" aria-label="Most reps"></span></div>`}
-      </div>`;
-    const load = type === "weights" ? field(t0.plateUp ? "Weight now" : "Weight next time", `<span class="unit-in"><input id="se-load" inputmode="decimal" value="${w.load === null ? "" : esc(E.fmtNum(w.load))}" placeholder="Not set"><span>lb</span></span>`, t0.plateUp ? "Next session goes up one plate from this. If you know the new weight, type it here instead." : w.how === "steps" && !loopOn() ? "Used by any step without its own weight." : "") : "";
-    const steps = w.how !== "steps" ? "" : `<div class="field"><span class="field-l">Steps</span>${timed ? "" : `<span class="field-h">Sets × reps. Fill in the second reps box for a range, like 8 to 12.</span>`}<ol class="steps">${w.steps.map((st, k) => `<li class="steprow" data-k="${k}"><span class="step-n">${k + 1}</span>
-        <input data-st="sets" inputmode="numeric" pattern="[0-9]*" value="${st.sets}" aria-label="Step ${k + 1} sets"><span class="x">×</span>
-        ${timed ? `<span class="unit-in sm"><input data-st="secs" inputmode="numeric" pattern="[0-9]*" value="${esc(st.secs === null ? "" : st.secs)}" aria-label="Step ${k + 1} seconds"><span>s</span></span>`
-          : `<span class="range-in sm"><input data-st="rmin" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps ? st.reps.min : "")}" aria-label="Step ${k + 1} reps, or the bottom of a range"><span>to</span><input data-st="rmax" inputmode="numeric" pattern="[0-9]*" value="${esc(st.reps && st.reps.max !== st.reps.min ? st.reps.max : "")}" placeholder="—" aria-label="Step ${k + 1} top of the rep range (optional)"></span>`}
-        ${type === "weights" && !loopOn() ? `<span class="unit-in sm"><input data-st="load" inputmode="decimal" value="${esc(st.load === null || st.load === undefined ? "" : E.fmtNum(st.load))}" placeholder="—" aria-label="Step ${k + 1} weight"><span>lb</span></span>` : ""}
-        <button type="button" class="icon-btn sm" data-w="step-del" data-k="${k}" aria-label="Remove step ${k + 1}"${w.steps.length < 2 ? " disabled" : ""}>${ICON.x}</button></li>`).join("")}</ol>
-        <button type="button" class="link" data-w="step-add">${ICON.plus}Add a step</button></div>
-      ${type === "weights" ? `<div class="field"><span class="field-l">After the last step</span>${chips("loop", [["stay", "Stay there"], ["loop", "Add weight, start over"]], w.loop ? "loop" : "stay")}</div>` : ""}
-      ${field("Next session", `<select id="se-step">${w.steps.map((st, k) => `<option value="${k}"${k === w.step ? " selected" : ""}>Step ${k + 1}: ${esc(stepText(st))}</option>`).join("")}</select>`)}`;
-    const prog = `<div class="field"><span class="field-l">How it goes up</span>${chips("how", HOW_CHOICES[type], w.how)}</div>
-      ${steps}
-      ${w.how === "none" ? "" : field("When", `<select id="se-when">${whenOpts.map(([k, l]) => `<option value="${k}"${k === whenKey ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
-      ${(w.how === "load" || loopOn()) ? `<div class="field"><span class="field-l">${loopOn() ? "Weight added after the last step" : "Each time, add"}</span>${chips("inc", [["amount", "An amount"], ["plate", "Next plate"]], plateOn() ? "plate" : "amount")}</div>
-        ${plateOn() ? `<p class="muted small">When it's time to go up, it says Next plate. Type the new weight in that session and it goes on from there.</p>` : field("Amount", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>lb</span></span>`, `Leave blank to use your ${w.kind === "machine" ? "machine" : "free-weight"} default (${E.fmtNum(defaultBy())} lb, in Settings).`)}`
-        : ["reps", "time"].includes(w.how) ? field("Each time, add", `<span class="unit-in"><input id="se-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="${esc(E.fmtNum(defaultBy()))}"><span>${unit()}</span></span>`) : ""}
-      ${w.how === "none" || w.when === "manual" ? "" : `<label class="check"><input type="checkbox" id="se-hold"${w.hold ? " checked" : ""}><span>${timed ? "Hold if I cut a set short" : "Hold if I miss reps"}</span></label>`}
-      ${w.when === "manual" && w.how !== "none" ? `<p class="muted small">In a session, set Next time to Go up when you're ready.</p>` : ""}`;
+      </div>${load}`;
+    }
     sh.setTitle(w.name || ex.name);
     sh.body.innerHTML = `${field("Name", `<input id="se-name" maxlength="80" autocomplete="off" value="${esc(w.name)}">`, "Renames it everywhere it's used.")}
-      <div class="field"><span class="field-l">Kind</span>${chips("kind", KIND_CHOICES, w.kind)}</div>
-      <label class="check"><input type="checkbox" id="se-side"${w.side ? " checked" : ""}><span>Each side</span></label>
-      ${w.how !== "steps" ? `<h3 class="h3 sec">Sets and reps</h3>` : type === "weights" ? `<h3 class="h3 sec">Weight</h3>` : ""}${amounts}${load}
-      <h3 class="h3 sec">Progression</h3>${prog}
+      <div class="field"><span class="field-l">Kind</span>${chips("kind", exChoices(ex.kind, w.kind), w.kind)}</div>
+      ${check ? `<p class="muted small">No sets or reps. You tick it off in your session.</p>` : `<label class="check"><input type="checkbox" id="se-side"${w.side ? " checked" : ""}><span>Each side</span></label>`}
+      ${check ? "" : `<h3 class="h3 sec">Progression</h3>${shared ? `<p class="muted small">${esc(shared)}</p>` : ""}${prog}`}
+      ${amounts}
       ${field("Note", `<input id="se-note" maxlength="200" autocomplete="off" value="${esc(w.note)}" placeholder="Seat 4, wide grip…">`, "Shows on this exercise in your session.")}
       <button type="button" class="btn ghost block" data-w="swap">${ICON.swap}Swap for a different exercise</button>
       <p class="form-err" id="se-err" role="alert" hidden></p>`;
-    wireChips(sh.body, "kind", (v) => { read(); w.kind = v; if (typeOf() !== "weights") w.load = null; draw(); });
+    wireChips(sh.body, "kind", (v) => {
+      read();
+      const before = typeOf(), kindBefore = w.kind;
+      w.kind = v;
+      const after = typeOf();
+      if ((before === "timed") !== (after === "timed")) { w.steps = []; w.step = 0; }
+      if (after !== "weights") w.load = null;
+      if (v === "release" && kindBefore !== "release") { w.sets = 1; w.secs = 60; w.how = "none"; w.mode = "own"; }
+      draw();
+    });
+    wireChips(sh.body, "mode", (v) => {
+      read();
+      if (v === "model" && w.mode !== "model") {
+        const ms = fitting();
+        const pick = ms.find((x) => x.id === p0.model) || ms.find((x) => x.type === "ladder" && x.from === w.rmin && x.to === w.rmax) || ms[0];
+        if (pick) { w.mode = "model"; setModel(pick.id); }
+      } else if (v === "own" && w.mode !== "own") {
+        const mm = curModel();
+        if (mm) { w.how = "steps"; w.steps = clone(E.modelSteps(mm)); w.loop = typeOf() === "weights" && mm.loop; w.when = mm.when; w.every = mm.every; w.hold = mm.hold; }
+        w.mode = "own";
+      }
+      draw();
+    });
     wireChips(sh.body, "how", (v) => { read(); w.how = v; draw(); });
     wireChips(sh.body, "loop", (v) => { read(); w.loop = v === "loop"; draw(); });
-    wireChips(sh.body, "inc", (v) => { read(); w.plate = v === "plate"; draw(); });
+    wireChips(sh.body, "inc", (v) => { read(); w.plate = v === "plate"; if (w.plate) w.by = null; draw(); });
     const whenSel = $("#se-when", sh.body);
     if (whenSel) whenSel.onchange = () => { read(); const [k, n] = whenSel.value.split("-"); w.when = k; w.every = Number(n) || 1; draw(); };
+    const modelSel = $("#se-model", sh.body);
+    if (modelSel) modelSel.onchange = () => { read(); setModel(modelSel.value); draw(); };
     $$("[data-w]", sh.body).forEach((b) => {
       b.onclick = () => {
         read();
@@ -2514,7 +3111,9 @@ function editSlot(rt, slotId, onDone) {
         else if (a === "sets+") w.sets = Math.min(20, w.sets + 1);
         else if (a === "step-add") { const last = w.steps[w.steps.length - 1]; w.steps.push(clone(last)); }
         else if (a === "step-del") { w.steps.splice(Number(b.dataset.k), 1); w.step = Math.min(w.step, w.steps.length - 1); }
-        else if (a === "swap") return swapSlot();
+        else if (a === "swap") return swapEx();
+        else if (a === "model-edit") return editModel(w.model, () => draw());
+        else if (a === "model-new") return editModel(null, (id) => { if (id && modelFits(modelById(id), typeOf())) { w.mode = "model"; setModel(id); } draw(); }, { unit: typeOf() === "timed" ? "secs" : "reps" });
         draw();
         const f = $(`[data-w="${a}"]`, sh.body); if (f && !f.disabled) f.focus();
       };
@@ -2533,54 +3132,58 @@ function editSlot(rt, slotId, onDone) {
     const hold = $("#se-hold", sh.body); if (hold) w.hold = hold.checked;
     if (v("#se-note") !== null) w.note = v("#se-note");
     const stepSel = $("#se-step", sh.body); if (stepSel) w.step = Number(stepSel.value) || 0;
-    $$(".steprow", sh.body).forEach((row) => {
-      const st = w.steps[Number(row.dataset.k)]; if (!st) return;
-      const g = (k) => { const e = $(`[data-st="${k}"]`, row); return e ? E.num(e.value) : undefined; };
-      if (g("sets") !== undefined && g("sets") !== null) st.sets = E.clampSets(g("sets"));
-      if (g("secs") !== undefined) st.secs = g("secs");
-      if (g("rmin") !== undefined) { const lo = g("rmin"), hi = g("rmax"); st.reps = E.normReps({ min: lo, max: hi === null || hi === undefined ? lo : hi }); }
-      if (g("load") !== undefined) st.load = g("load");
-    });
+    if (w.mode === "own") readSteps(sh.body, w.steps);
   }
-  function swapSlot() {
+  function swapEx() {
     pickExercise({ title: `Swap ${ex.name} for…`, exclude: ex.id, kind: rt.kind }, (nx) => {
-      slot.exId = nx.id; slot.load = null; slot.at = nowISO();
+      const from = setupFor(ex.id, fam);
+      if (!setupFor(nx.id, fam)) ensureSetup(nx.id, fam, from && nx.type === ex.type && E.normProg(from.prog, ex.type).how !== "free" ? from : null);
+      slot.exId = nx.id;
       savePlan(); sh.close(true);
       if (onDone) onDone();
-      editSlot(rt, slot.id, onDone);
+      editSetup(rt, slot.id, onDone);
     });
   }
   function err(m) { const e = $("#se-err", sh.body); e.textContent = m; e.hidden = !m; if (m) e.scrollIntoView({ block: "nearest" }); }
   function save() {
     read();
-    const type = typeOf(), timed = type === "timed";
+    const type = typeOf(), timed = type === "timed", check = type === "check";
+    const m = !check && w.mode === "model" ? curModel() : null;
     if (!w.name) return err("Give the exercise a name.");
-    if (w.how !== "steps") {
+    if (!check && w.mode === "model" && !m) return err("Pick a model.");
+    if (!check && !m && w.how !== "steps") {
       if (timed && (w.secs === null || w.secs < 1)) return err("Enter how many seconds.");
       if (!timed && (w.rmin === null || w.rmin < 1)) return err("Enter the reps.");
       if (!timed && w.rmax !== null && w.rmax < w.rmin) return err("The most reps can't be less than the fewest.");
-    } else {
-      if (w.steps.some((st) => (timed ? !(st.secs >= 1) : !st.reps))) return err(timed ? "Each step needs its seconds." : "Each step needs its reps.");
     }
+    if (!check && !m && w.how === "steps" && w.steps.some((st) => (timed ? !(st.secs >= 1) : !st.reps))) return err(timed ? "Each step needs its seconds." : "Each step needs its reps.");
     if (w.load !== null && (w.load < 0 || w.load > 2000)) return err("Check the weight.");
     // The exercise itself (shared by every routine that uses it)
     const oldType = ex.type;
-    ex.name = w.name.slice(0, 80); ex.type = type; ex.equip = type === "weights" ? (w.kind === "machine" ? "machine" : "free") : null; ex.side = w.side;
-    // Its place in this routine
-    const reps = timed ? null : E.normReps({ min: w.rmin, max: w.rmax === null ? w.rmin : w.rmax });
+    ex.name = w.name.slice(0, 80); applyKind(ex, w.kind); ex.side = check ? false : w.side;
+    // How it's done in this family
+    const reps = timed || check ? null : E.normReps({ min: w.rmin || 1, max: w.rmax === null ? w.rmin : w.rmax });
     const secs = timed ? Math.round(w.secs || 30) : null;
-    const prog = { how: w.how, when: w.how === "none" ? "weeks" : w.when, every: w.every, by: w.by, hold: w.hold, steps: w.how === "steps" ? E.normSteps(w.steps) : (slot.prog.steps || []), loop: w.how === "steps" && type === "weights" && !!w.loop, plate: w.plate === true ? true : w.plate === false ? false : null };
-    const np = E.normProg(prog, type);
-    const t = E.snapshot(t0);
-    const changed = oldType !== type || np.how !== p0.how
+    let prog;
+    if (check) prog = { how: "none", when: "weeks", every: 1, by: null, hold: true, steps: [], loop: false, plate: null, model: null };
+    else if (m) prog = { how: "steps", when: m.when, every: m.every, by: w.by, hold: m.hold, steps: E.modelSteps(m), loop: m.loop, plate: w.plate, model: m.id };
+    else prog = { how: w.how, when: w.how === "none" || w.how === "free" ? "session" : w.when, every: w.every, by: w.by, hold: w.hold, steps: E.normSteps(w.steps), loop: w.how === "steps" && type === "weights" && !!w.loop, plate: w.plate === true ? true : w.plate === false ? false : null, model: null };
+    const np = E.normProg(prog, type), t = t0;
+    const sameReps = (a, b) => (!a && !b) || (!!a && !!b && a.min === b.min && a.max === b.max);
+    // A new starting point when what loads next was changed by hand (or the exercise changed kind or progression)
+    const rebase = oldType !== type || np.how !== rp.how || (np.model || null) !== (p0.model || null)
       || (type === "weights" && !E.eqNum(w.load, t.load))
-      || (np.how === "reps" && (!t.reps || !reps || reps.min !== t.reps.min || reps.max !== t.reps.max))
+      || (np.how === "reps" && !sameReps(reps, t.reps))
       || (np.how === "time" && !E.eqNum(secs, t.secs))
-      || (np.how === "steps" && w.step !== t.step);
-    slot.sets = w.how === "steps" ? slot.sets : E.clampSets(w.sets);
-    if (w.how !== "steps") { slot.reps = reps; slot.secs = secs; }
-    if (changed) { slot.load = type === "weights" ? w.load : null; slot.step = w.how === "steps" ? w.step : 0; slot.at = nowISO(); if (w.how !== "steps") { slot.reps = reps; slot.secs = secs; } }
-    slot.prog = prog; slot.note = w.note.slice(0, 200);
+      || (np.how === "steps" && w.step !== t.step)
+      || (np.how === "free" && (E.clampSets(w.sets) !== t.sets || (timed ? !E.eqNum(secs, t.secs) : !sameReps(reps, t.reps))));
+    const st = S.plan.setups[key] || ensureSetup(ex.id, fam);
+    st.sets = check ? 1 : E.clampSets(w.sets);
+    st.reps = reps; st.secs = check ? null : secs;
+    if (rebase) { st.load = type === "weights" ? w.load : null; st.step = np.how === "steps" ? w.step : 0; st.at = nowISO(); }
+    st.prog = prog;
+    slot.note = w.note.slice(0, 200);
+    if (oldType !== type) retypeSetups(ex, key);
     savePlan(); sh.close(true);
     if (onDone) onDone();
     toast(`${ex.name} saved`);
@@ -2594,6 +3197,144 @@ function editSlot(rt, slotId, onDone) {
     toast(`${ex.name} removed from ${rt.name}`, { label: "Undo", run: () => { rt.slots.splice(i, 0, removed); savePlan(); if (onDone) onDone(); render(); } });
   };
   draw();
+}
+// An exercise changed kind (say, weights to a timed hold): its setups in other families start over for the new kind
+function retypeSetups(ex, exceptKey) {
+  for (const k of Object.keys(S.plan.setups)) {
+    if (k === exceptKey || k.split("|")[0] !== ex.id) continue;
+    const fam = k.slice(ex.id.length + 1);
+    S.plan.setups[k] = Object.assign(E.newSetup(slotDefaults(ex, fam), S.settings), { at: nowISO() });
+  }
+}
+
+// ---------- Progression models ----------
+function modelUsers(id) {
+  const out = [];
+  for (const [k, st] of Object.entries(S.plan.setups)) {
+    if (!st || !st.prog || st.prog.model !== id) continue;
+    const exId = k.split("|")[0], ex = exById(exId);
+    if (ex) out.push({ key: k, ex, fam: k.slice(exId.length + 1) });
+  }
+  return out;
+}
+function editModel(id, onDone, o) {
+  const m0 = id ? modelById(id) : null;
+  const w = m0 ? clone(m0) : { id: uid("md"), name: "", type: "ladder", sets: 3, from: 8, to: 12, steps: [], loop: true, when: "session", every: 1, hold: true, by: null, plate: null };
+  w.unit = m0 ? modelUnit(m0) : (o && o.unit) || "reps";
+  if (!m0 && w.unit === "secs") w.type = "steps";
+  w.inc = w.plate === true ? "plate" : w.by ? "amount" : "auto";
+  const users = m0 ? modelUsers(m0.id) : [];
+  const sh = openSheet({ title: m0 ? m0.name : "New model", tall: true });
+  const secsNow = () => w.type === "steps" && w.unit === "secs";
+  const loopNow = () => !secsNow() && (w.type === "ladder" || w.loop);
+  function shaped() { return E.normModel(Object.assign({}, w, { name: w.name || "Model", steps: w.type === "steps" ? E.normSteps(w.steps) : [], loop: w.type === "ladder" ? true : !secsNow() && !!w.loop })); }
+  function preview() {
+    const st = E.modelSteps(shaped());
+    if (!st.length) return "";
+    const f = (x) => `${x.sets} × ${x.secs !== null ? E.fmtSecs(x.secs) : E.fmtReps(x.reps)}`;
+    const list = st.length > 6 ? `${st.slice(0, 3).map(f).join(", ")} … ${f(st[st.length - 1])}` : st.map(f).join(", ");
+    return `${list}${loopNow() ? `, then more weight and back to ${f(st[0])}` : ", then it stays there"}.`;
+  }
+  function draw() {
+    if (w.type === "steps" && !w.steps.length) w.steps = secsNow() ? [{ sets: 3, reps: null, secs: 20, load: null }, { sets: 3, reps: null, secs: 30, load: null }] : [{ sets: 3, reps: { min: 8, max: 8 }, secs: null, load: null }, { sets: 3, reps: { min: 10, max: 10 }, secs: null, load: null }];
+    const secs = secsNow();
+    if (secs && w.when === "range") w.when = "session";
+    const whenOpts = E.WHEN_OPTIONS.filter(([k]) => !(k.startsWith("range") && secs));
+    const whenKey = `${w.when}-${w.when === "weeks" || w.when === "sessions" ? w.every : 1}`;
+    const mp = S.settings.inc.machinePlate;
+    const usedBy = listJoin(users.map((u) => `${u.ex.name}${new Set(users.map((x) => x.fam)).size > 1 ? ` (${famLabel(u.fam)})` : ""}`));
+    sh.setTitle(w.name || (m0 ? m0.name : "New model"));
+    sh.body.innerHTML = `${field("Name", `<input id="md-name" maxlength="60" autocomplete="off" value="${esc(w.name)}" placeholder="Double progression – Heavy">`)}
+      <div class="field"><span class="field-l">Type</span>${chips("md-type", [["ladder", "Rep ladder"], ["steps", "Custom steps"]], w.type)}<span class="field-h">${w.type === "ladder" ? "Double progression: one more rep each time. After the top, add weight and start over at the bottom." : "Your own steps, in order."}</span></div>
+      ${w.type === "ladder" ? `<div class="amounts">
+          ${field("Sets", `<span class="stepper"><button type="button" class="icon-btn sm" data-w="sets-" aria-label="One less set">${ICON.minus}</button><input id="md-sets" inputmode="numeric" pattern="[0-9]*" value="${w.sets}" aria-label="Sets"><button type="button" class="icon-btn sm" data-w="sets+" aria-label="One more set">${ICON.plus}</button></span>`)}
+          <div class="field"><span class="field-l">Reps</span><span class="range-in"><input id="md-from" inputmode="numeric" pattern="[0-9]*" value="${esc(w.from)}" aria-label="Bottom of the ladder"><span>to</span><input id="md-to" inputmode="numeric" pattern="[0-9]*" value="${esc(w.to)}" aria-label="Top of the ladder"></span></div>
+        </div>`
+        : `<div class="field"><span class="field-l">Measured in</span>${chips("md-unit", [["reps", "Reps"], ["secs", "Seconds"]], w.unit)}</div>
+          <div class="field"><span class="field-l">Steps</span>${stepsHtml(w.steps, { timed: secs, load: false })}</div>
+          ${secs ? "" : `<div class="field"><span class="field-l">After the last step</span>${chips("md-loop", [["stay", "Stay there"], ["loop", "Add weight, start over"]], w.loop ? "loop" : "stay")}</div>`}`}
+      <p class="model-prev">${esc(preview())}</p>
+      ${field("When it moves up", `<select id="md-when">${whenOpts.map(([k, l]) => `<option value="${k}"${k === whenKey ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
+      <label class="check"><input type="checkbox" id="md-hold"${w.hold ? " checked" : ""}><span>${secs ? "Hold if I cut a set short" : "Hold if I miss reps"}</span></label>
+      ${loopNow() ? `<div class="field"><span class="field-l">Weight added after the top</span>${chips("md-inc", [["auto", "My defaults"], ["amount", "An amount"], ["plate", "Next plate"]], w.inc)}</div>
+        ${w.inc === "amount" ? field("Amount", `<span class="unit-in"><input id="md-by" inputmode="decimal" value="${w.by ? esc(E.fmtNum(w.by)) : ""}" placeholder="5"><span>lb</span></span>`)
+          : `<p class="muted small">${w.inc === "plate" ? "It says Next plate, and you type the new weight in that session." : `${mp ? "Next plate on machines" : `+${E.fmtNum(S.settings.inc.machine)} lb on machines`}, +${E.fmtNum(S.settings.inc.free)} lb on free weights. Change these in Settings. An exercise can also set its own.`}</p>`}` : ""}
+      ${users.length ? `<p class="muted small">Used by ${esc(usedBy)}. Changes apply to all of them.</p>` : ""}
+      <p class="form-err" id="md-err" role="alert" hidden></p>`;
+    wireChips(sh.body, "md-type", (v) => { read(); w.type = v; draw(); });
+    wireChips(sh.body, "md-unit", (v) => { read(); if (v !== w.unit) { w.unit = v; w.steps = []; } draw(); });
+    wireChips(sh.body, "md-loop", (v) => { read(); w.loop = v === "loop"; draw(); });
+    wireChips(sh.body, "md-inc", (v) => { read(); w.inc = v; draw(); });
+    const whenSel = $("#md-when", sh.body);
+    whenSel.onchange = () => { read(); const [k, n] = whenSel.value.split("-"); w.when = k; w.every = Number(n) || 1; };
+    for (const idn of ["#md-sets", "#md-from", "#md-to"]) { const e = $(idn, sh.body); if (e) e.onchange = () => { read(); const p = $(".model-prev", sh.body); if (p) p.textContent = preview(); }; }
+    $$(".steprow input", sh.body).forEach((e) => { e.onchange = () => { read(); const p = $(".model-prev", sh.body); if (p) p.textContent = preview(); }; });
+    $$("[data-w]", sh.body).forEach((b) => {
+      b.onclick = () => {
+        read();
+        const a = b.dataset.w;
+        if (a === "sets-") w.sets = Math.max(1, w.sets - 1);
+        else if (a === "sets+") w.sets = Math.min(20, w.sets + 1);
+        else if (a === "step-add") w.steps.push(clone(w.steps[w.steps.length - 1]));
+        else if (a === "step-del") w.steps.splice(Number(b.dataset.k), 1);
+        draw();
+        const f = $(`[data-w="${a}"]`, sh.body); if (f && !f.disabled) f.focus();
+      };
+    });
+  }
+  function read() {
+    const v = (id) => { const e = $(id, sh.body); return e ? e.value.trim() : null; };
+    if (v("#md-name") !== null) w.name = v("#md-name");
+    if (v("#md-sets") !== null) { const n = E.num(v("#md-sets")); if (n !== null) w.sets = E.clampSets(n); }
+    if (v("#md-from") !== null) w.from = E.num(v("#md-from"));
+    if (v("#md-to") !== null) w.to = E.num(v("#md-to"));
+    if (v("#md-by") !== null) { const n = E.num(v("#md-by")); w.by = n !== null && n > 0 ? n : null; }
+    const hold = $("#md-hold", sh.body); if (hold) w.hold = hold.checked;
+    readSteps(sh.body, w.steps);
+  }
+  function err(msg) { const e = $("#md-err", sh.body); e.textContent = msg; e.hidden = !msg; if (msg) e.scrollIntoView({ block: "nearest" }); }
+  function save() {
+    read();
+    const name = (w.name || "").trim();
+    if (!name) return err("Give the model a name.");
+    if (S.plan.models.some((x) => x.id !== w.id && x.name.toLowerCase() === name.toLowerCase())) return err("You already have a model with that name.");
+    if (w.type === "ladder") {
+      if (!(w.from >= 1) || !(w.to >= 1)) return err("Enter the reps at the bottom and the top.");
+      if (w.to <= w.from) return err("The top of the ladder needs more reps than the bottom.");
+      if (w.to - w.from > 15) return err("Keep the ladder to 16 steps or fewer.");
+    } else if (w.steps.some((st) => (secsNow() ? !(st.secs >= 1) : !st.reps))) return err(secsNow() ? "Each step needs its seconds." : "Each step needs its reps.");
+    const unit = w.type === "steps" ? w.unit : "reps";
+    const misfit = users.filter((u) => (unit === "secs") !== (u.ex.type === "timed"));
+    if (misfit.length) return err(`${listJoin(Array.from(new Set(misfit.map((u) => u.ex.name))))} ${misfit.length === 1 ? "uses" : "use"} this model with ${unit === "secs" ? "reps" : "seconds"}. Make a new model for this instead.`);
+    const inc = loopNow() ? w.inc : "auto";
+    const nm = E.normModel(Object.assign({}, w, { name, from: Math.round(w.from || 1), to: Math.round(w.to || 1), steps: w.type === "steps" ? E.normSteps(w.steps) : [], loop: w.type === "ladder" ? true : unit === "reps" && !!w.loop, plate: inc === "plate" ? true : inc === "amount" ? false : null, by: inc === "amount" ? w.by : null }));
+    if (!nm) return err("Check the model.");
+    const i = S.plan.models.findIndex((x) => x.id === nm.id);
+    if (i >= 0) S.plan.models[i] = nm; else S.plan.models.push(nm);
+    // Linked exercises keep a copy of the steps, in case the model is ever missing
+    for (const u of modelUsers(nm.id)) { const st = S.plan.setups[u.key]; st.prog = Object.assign({}, st.prog, { steps: E.modelSteps(nm), when: nm.when, every: nm.every, hold: nm.hold, loop: nm.loop }); }
+    savePlan(); sh.close(true); render();
+    toast(`${nm.name} saved${users.length ? `. ${plural(users.length, "exercise")} use${users.length === 1 ? "s" : ""} it.` : ""}`);
+    if (onDone) onDone(nm.id);
+  }
+  sh.setFoot(`${m0 ? `<button class="btn ghost danger-text" id="md-del">${ICON.trash}Delete</button>` : ""}<button class="btn red" id="md-save">Save model</button>`);
+  $("#md-save", sh.foot).onclick = save;
+  const del = $("#md-del", sh.foot);
+  if (del) del.onclick = async () => {
+    const n = modelUsers(m0.id).length;
+    if (!(await confirmBox({ title: `Delete ${m0.name}?`, body: n ? `${plural(n, "exercise")} use${n === 1 ? "s" : ""} it. They keep its steps as their own setup.` : "No exercises use it.", ok: "Delete", danger: true }))) return;
+    for (const u of modelUsers(m0.id)) {
+      const st = S.plan.setups[u.key], r = E.resolveSetup(st, S.plan.models);
+      st.sets = r.sets; st.reps = r.reps; st.secs = r.secs;
+      st.prog = Object.assign({}, r.prog, { model: null });
+    }
+    S.plan.models = S.plan.models.filter((x) => x.id !== m0.id);
+    savePlan(); sh.close(true); render();
+    toast(`${m0.name} deleted`);
+    if (onDone) onDone(null);
+  };
+  draw();
+  if (!m0) setTimeout(() => { const e = $("#md-name", sh.body); if (e) e.focus(); }, 60);
 }
 
 // ---------- Picking and creating exercises ----------
@@ -2624,21 +3365,20 @@ function pickExercise(o, cb) {
   if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => q.focus(), 60);
 }
 function newExerciseForm(sh, name, kind, cb) {
-  sh.setTitle(kind === "stretch" ? "New stretch" : kind === "physio" ? "New physio exercise" : "New exercise");
+  const exKind = E.EX_KINDS.includes(kind) ? kind : "workout";
+  sh.setTitle(exKind === "stretch" ? "New stretch" : exKind === "physio" ? "New physio exercise" : "New exercise");
   sh.body.innerHTML = field("Name", `<input id="nx-name" maxlength="80" autocomplete="off" value="${esc(name)}">`) +
-    `<div class="field"><span class="field-l">Kind</span>${chips("nk", KIND_CHOICES, kind === "stretch" ? "timed" : "free")}</div>
-    <label class="check"><input type="checkbox" id="nx-side"><span>Each side</span></label><p class="form-err" id="nx-err" role="alert" hidden></p>`;
-  wireChips(sh.body, "nk", () => {});
+    `<div class="field"><span class="field-l">Kind</span>${chips("nk", exChoices(exKind), exKind === "stretch" ? "timed" : "free")}</div>
+    <label class="check" id="nx-side-l"><input type="checkbox" id="nx-side"><span>Each side</span></label><p class="form-err" id="nx-err" role="alert" hidden></p>`;
+  wireChips(sh.body, "nk", (v) => { $("#nx-side-l", sh.body).hidden = v === "check"; });
   sh.setFoot(`<button class="btn red block" id="nx-go">Create exercise</button>`);
   $("#nx-go", sh.foot).onclick = () => {
     const nm = $("#nx-name", sh.body).value.trim();
     if (!nm) { const e = $("#nx-err", sh.body); e.textContent = "Give it a name."; e.hidden = false; return; }
-    const exKind = E.EX_KINDS.includes(kind) ? kind : "workout";
     let ex = E.findExercise(S.plan.exercises, nm, exKind);
     if (!ex) {
-      const k = chipValue(sh.body, "nk") || "free";
-      const type = k === "free" || k === "machine" ? "weights" : k;
-      ex = { id: uid("ex"), name: nm.slice(0, 80), type, equip: type === "weights" ? k : null, side: $("#nx-side", sh.body).checked, kind: exKind };
+      ex = { id: uid("ex"), name: nm.slice(0, 80), type: "weights", equip: null, side: $("#nx-side", sh.body).checked, kind: exKind, style: null };
+      applyKind(ex, chipValue(sh.body, "nk") || (exKind === "stretch" ? "timed" : "free"));
       S.plan.exercises.push(ex); savePlan();
     }
     sh.close(true); cb(ex);
@@ -2662,23 +3402,26 @@ function exerciseForm(ex, onDone) {
   const inUse = S.plan.routines.some((r) => r.slots.some((s) => s.exId === ex.id));
   const hasLogs = S.logs.some((l) => (l.items || []).some((it) => it.exId === ex.id));
   sh.body.innerHTML = field("Name", `<input id="xf-name" maxlength="80" autocomplete="off" value="${esc(ex.name)}">`) +
-    `<div class="field"><span class="field-l">Kind</span>${chips("xk", KIND_CHOICES, kindOf(ex.type, ex.equip))}</div>
-    <label class="check"><input type="checkbox" id="xf-side"${ex.side ? " checked" : ""}><span>Each side</span></label>
+    `<div class="field"><span class="field-l">Kind</span>${chips("xk", exChoices(ex.kind, kindOf(ex)), kindOf(ex))}</div>
+    <label class="check" id="xf-side-l"${ex.type === "check" ? " hidden" : ""}><input type="checkbox" id="xf-side"${ex.side ? " checked" : ""}><span>Each side</span></label>
     <p class="muted small">In your ${esc(EX_KIND_HEAD[ex.kind].toLowerCase())}. It can only be added to ${ex.kind === "workout" ? "workouts" : ex.kind === "physio" ? "physio routines" : "stretch routines"}.</p>
     ${!inUse ? `<button class="btn ghost danger-text block" id="xf-del">${ICON.trash}Delete exercise</button>` : `<p class="muted small">To delete it, take it out of your routines first.</p>`}`;
-  wireChips(sh.body, "xk", () => {});
+  wireChips(sh.body, "xk", (v) => { $("#xf-side-l", sh.body).hidden = v === "check"; });
   sh.setFoot(`<button class="btn red block" id="xf-save">Save</button>`);
   $("#xf-save", sh.foot).onclick = () => {
     const nm = $("#xf-name", sh.body).value.trim();
     if (!nm) return;
-    const k = chipValue(sh.body, "xk") || kindOf(ex.type, ex.equip), type = k === "free" || k === "machine" ? "weights" : k;
-    ex.name = nm.slice(0, 80); ex.type = type; ex.equip = type === "weights" ? k : null; ex.side = $("#xf-side", sh.body).checked;
+    const oldType = ex.type;
+    ex.name = nm.slice(0, 80); ex.side = $("#xf-side", sh.body).checked;
+    applyKind(ex, chipValue(sh.body, "xk") || kindOf(ex));
+    if (ex.type !== oldType) retypeSetups(ex, null);
     savePlan(); sh.close(true); onDone();
   };
   const del = $("#xf-del", sh.body);
   if (del) del.onclick = async () => {
     if (!(await confirmBox({ title: `Delete ${ex.name}?`, body: hasLogs ? "Its logged sessions stay in your history." : "It isn't in any routine.", ok: "Delete", danger: true }))) return;
     S.plan.exercises = S.plan.exercises.filter((e) => e.id !== ex.id);
+    for (const k of Object.keys(S.plan.setups)) if (k.split("|")[0] === ex.id) delete S.plan.setups[k];
     savePlan(); sh.close(true); onDone();
   };
 }
@@ -2740,7 +3483,8 @@ async function openSettings() {
     try { d = JSON.parse(await f.text()); } catch (err) { d = null; }
     if (!d || d.app !== "workout-tracker" || !Array.isArray(d.logs)) { box.innerHTML = `<p class="form-err">That file isn't a Workout Tracker backup.</p>`; return; }
     const logs = d.logs.filter(E.validLog), have = new Set(S.logs.map((l) => l.id)), fresh = logs.filter((l) => !have.has(l.id));
-    const plan = normPlan(d.plan);
+    const plan = normPlan(E.migratePlan(d.plan).plan);
+    plan.preloads = Array.from(new Set(plan.preloads.concat(S.plan.preloads || [])));   // restoring doesn't load Upper and Lower again
     const dates = logs.map((l) => l.date).sort();
     box.innerHTML = `<div class="restore"><p>This backup has ${plural(logs.length, "session")}${dates.length ? ` from ${esc(E.fmtMD(dates[0]))}, ${dates[0].slice(0, 4)} to ${esc(E.fmtMD(dates[dates.length - 1]))}, ${dates[dates.length - 1].slice(0, 4)}` : ""} and ${plural(plan.routines.length, "routine")}. Restoring adds the ${plural(fresh.length, "session")} this phone doesn't have, and replaces your routines, split and settings with the backup's.</p><div class="row-btns"><button class="btn ghost sm" data-x="no">Cancel</button><button class="btn red sm" data-x="yes">Restore</button></div></div>`;
     $("[data-x=no]", box).onclick = () => { box.innerHTML = ""; };
